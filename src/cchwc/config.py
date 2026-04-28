@@ -8,6 +8,10 @@ class Settings(BaseSettings):
     claude_root: Path = Path.home() / ".claude" / "projects"
     codex_root: Path = Path.home() / ".codex" / "sessions"
 
+    # scan scope: "global" = 전체, "project" = scan_roots에 지정된 경로만
+    scan_mode: str = "global"
+    scan_roots: list[str] = []
+
     host: str = "127.0.0.1"
     port: int = 7878
 

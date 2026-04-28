@@ -8,11 +8,17 @@ from cchwc.adapters.base import SessionAdapter
 from cchwc.core.schemas import ParsedMessage, ParsedSession, TokenUsage
 
 
+def encode_cwd(cwd: str) -> str:
+    """cwd 경로를 Claude가 사용하는 디렉토리명으로 인코딩."""
+    return re.sub(r"[:\\/]", "-", cwd)
+
+
 class ClaudeAdapter(SessionAdapter):
     agent_type = "claude"
 
-    def __init__(self, root: Path | None = None):
+    def __init__(self, root: Path | None = None, scan_roots: list[str] | None = None):
         self._root = root or (Path.home() / ".claude" / "projects")
+        self._scan_roots = scan_roots  # None = global, [] = no filter, [cwd...] = project filter
 
     def session_root(self) -> Path:
         return self._root
@@ -21,7 +27,22 @@ class ClaudeAdapter(SessionAdapter):
         root = self.session_root()
         if not root.exists():
             return
-        yield from root.rglob("*.jsonl")
+
+        if not self._scan_roots:
+            yield from root.rglob("*.jsonl")
+            return
+
+        for cwd in self._scan_roots:
+            encoded = encode_cwd(cwd)
+            project_dir = root / encoded
+            if project_dir.exists():
+                yield from project_dir.glob("*.jsonl")
+            else:
+                # 대소문자 무관 탐색 (Windows 경로)
+                for d in root.iterdir():
+                    if d.is_dir() and d.name.lower() == encoded.lower():
+                        yield from d.glob("*.jsonl")
+                        break
 
     def parse_file(self, path: Path) -> ParsedSession | None:
         lines = self._read_jsonl(path)
@@ -99,6 +120,7 @@ class ClaudeAdapter(SessionAdapter):
         )
 
     def extract_cwd(self, path: Path) -> str | None:
+        """프로젝트 디렉토리명에서 cwd를 역디코딩 (JSONL에 cwd 필드가 없을 때 fallback)."""
         project_dir = path.parent.name
         if not project_dir:
             return None
