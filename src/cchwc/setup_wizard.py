@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import platform
 import shutil
 import subprocess
@@ -41,8 +42,29 @@ _STYLE = Style([
 def _ok(msg: str)   -> None: console.print(f"  [bold green]✓[/bold green]  {msg}")
 def _fail(msg: str) -> None: console.print(f"  [bold red]✗[/bold red]  {msg}")
 def _info(msg: str) -> None: console.print(f"  [dim]→[/dim]  {msg}")
+def _which(name: str) -> str | None:
+    if IS_WIN and name == "npm":
+        return shutil.which("npm.cmd") or shutil.which("npm.exe") or shutil.which("npm")
+    return shutil.which(name)
+
+
+def _subprocess_cmd(cmd: list[str]) -> list[str]:
+    exe = Path(cmd[0]).suffix.lower()
+    if IS_WIN and exe in {".cmd", ".bat"}:
+        return ["cmd", "/c", *cmd]
+    return cmd
+
+
 def _run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, capture_output=True, text=True, **kw)
+    return subprocess.run(_subprocess_cmd(cmd), capture_output=True, text=True, **kw)
+
+
+def _ensure_uv_cache_env() -> None:
+    if os.environ.get("UV_CACHE_DIR"):
+        return
+    cache_dir = INSTALL_DIR / ".uv-cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    os.environ["UV_CACHE_DIR"] = str(cache_dir)
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -78,10 +100,10 @@ def step_prereqs() -> dict:
     console.print()
 
     checks: dict[str, str | None] = {
-        "node":   shutil.which("node"),
-        "npm":    shutil.which("npm"),
-        "git":    shutil.which("git"),
-        "uv":     shutil.which("uv") or shutil.which(
+        "node":   _which("node"),
+        "npm":    _which("npm"),
+        "git":    _which("git"),
+        "uv":     _which("uv") or shutil.which(
                       str(Path.home() / ".local" / "bin" / ("uv.exe" if IS_WIN else "uv"))),
     }
     for name, path in checks.items():
@@ -97,13 +119,15 @@ def step_prereqs() -> dict:
     if not checks["node"]:
         console.print()
         console.print(f"  [yellow]{t('node_missing')}[/yellow]")
-        sys.exit(1)
+    if not checks["npm"]:
+        console.print(f"  [yellow]{t('npm_missing')}[/yellow]")
     console.print()
     return checks
 
 
 def step_install_uv(checks: dict) -> None:
     if checks.get("uv"):
+        _ensure_uv_cache_env()
         return
     console.print(Rule(f"[bold]{t('step_uv')}[/bold]", style="bright_black"))
     console.print()
@@ -124,8 +148,9 @@ def step_install_uv(checks: dict) -> None:
 
     if result.returncode == 0:
         bin_name = "uv.exe" if IS_WIN else "uv"
-        uv_path = str(Path.home() / ".local" / "bin" / bin_name)
+        uv_path = _which("uv") or str(Path.home() / ".local" / "bin" / bin_name)
         checks["uv"] = uv_path
+        _ensure_uv_cache_env()
         _ok(f"uv  [dim]{uv_path}[/dim]")
     else:
         _fail(t("uv_install_failed"))
@@ -137,8 +162,9 @@ def step_sync_deps(checks: dict) -> None:
     console.print(Rule(f"[bold]{t('step_deps')}[/bold]", style="bright_black"))
     console.print()
     uv = checks.get("uv", "uv")
+    _ensure_uv_cache_env()
     with Status(f"  {t('installing')}", spinner="dots"):
-        result = _run([uv, "sync"], cwd=str(INSTALL_DIR))
+        result = _run([uv, "sync", "--frozen", "--no-dev"], cwd=str(INSTALL_DIR))
     if result.returncode == 0:
         _ok(t("done"))
     else:
@@ -147,80 +173,95 @@ def step_sync_deps(checks: dict) -> None:
     console.print()
 
 
-def _install_cli(label: str, pkg: str, check_cmd: str, checks: dict,
-                  prompt_key: str, hint_key: str) -> None:
-    path = shutil.which(check_cmd)
+def _install_cli(
+    label: str,
+    pkg: str,
+    check_cmd: str,
+    checks: dict,
+    prompt_key: str,
+    hint_key: str,
+    *,
+    interactive: bool = True,
+    install_missing: bool = True,
+) -> None:
+    path = _which(check_cmd)
     if path:
         _ok(f"{check_cmd}  [dim]{path}[/dim]")
         return
     _fail(f"{check_cmd}  [dim]{t('not_found')}[/dim]")
-    if questionary.confirm(t(prompt_key), default=True, style=_STYLE).ask():
+    npm = checks.get("npm") or _which("npm")
+    if not npm:
+        _info(t("npm_missing_cli", package=pkg))
+        return
+    should_install = install_missing
+    if interactive:
+        should_install = bool(questionary.confirm(t(prompt_key), default=True, style=_STYLE).ask())
+    if should_install:
         with Status(f"  {t('installing')}", spinner="dots"):
-            result = subprocess.run(
-                ["npm", "install", "-g", pkg],
-                capture_output=True, text=True, shell=IS_WIN,
-            )
+            result = _run([npm, "install", "-g", pkg])
         if result.returncode == 0:
-            _ok(f"{check_cmd}  {t('done')}")
+            installed = _which(check_cmd)
+            detail = f"  [dim]{installed}[/dim]" if installed else ""
+            _ok(f"{check_cmd}  {t('done')}{detail}")
         else:
-            _fail(t("install_failed"))
+            _fail(result.stderr.strip()[:300] or t("install_failed"))
     else:
         _info(t(hint_key))
 
 
-def step_claude_cli(checks: dict) -> None:
+def step_claude_cli(checks: dict, *, interactive: bool = True, install_missing: bool = True) -> None:
     console.print(Rule(f"[bold]{t('step_claude')}[/bold]", style="bright_black"))
     console.print()
     _install_cli("Claude", "@anthropic-ai/claude-code", "claude", checks,
-                 "install_claude_prompt", "login_hint_claude")
+                 "install_claude_prompt", "login_hint_claude",
+                 interactive=interactive, install_missing=install_missing)
 
-    claude = shutil.which("claude")
+    claude = _which("claude")
     if claude:
         try:
-            probe = subprocess.run(
-                ["claude", "config", "list"],
-                capture_output=True, text=True, shell=IS_WIN, timeout=8,
-            )
+            probe = _run([claude, "config", "list"], timeout=8)
             authenticated = probe.returncode == 0
         except subprocess.TimeoutExpired:
             authenticated = False
 
         if authenticated:
             _ok(t("login_ok"))
-        else:
+        elif interactive:
             console.print()
             console.print(f"  [yellow]{t('login_manual')}[/yellow]")
             console.print("  [bold cyan]  claude login[/bold cyan]")
             console.print(f"  [dim]{t('login_manual_hint')}[/dim]")
             questionary.press_any_key_to_continue(t("login_press_key"), style=_STYLE).ask()
+        else:
+            _info(t("login_hint_claude"))
     console.print()
 
 
-def step_codex_cli() -> None:
+def step_codex_cli(checks: dict, *, interactive: bool = True, install_missing: bool = True) -> None:
     console.print(Rule(f"[bold]{t('step_codex')}[/bold]", style="bright_black"))
     console.print()
-    _install_cli("Codex", "@openai/codex", "codex", {},
-                 "install_codex_prompt", "login_hint_codex")
+    _install_cli("Codex", "@openai/codex", "codex", checks,
+                 "install_codex_prompt", "login_hint_codex",
+                 interactive=interactive, install_missing=install_missing)
 
-    codex = shutil.which("codex")
+    codex = _which("codex")
     if codex:
         try:
-            probe = subprocess.run(
-                ["codex", "config", "get", "api-key"],
-                capture_output=True, text=True, shell=IS_WIN, timeout=8,
-            )
+            probe = _run([codex, "config", "get", "api-key"], timeout=8)
             authenticated = probe.returncode == 0 and bool(probe.stdout.strip())
         except subprocess.TimeoutExpired:
             authenticated = False
 
         if authenticated:
             _ok(t("codex_login_ok"))
-        else:
+        elif interactive:
             console.print()
             console.print(f"  [yellow]{t('codex_login_manual')}[/yellow]")
             console.print("  [bold cyan]  codex login[/bold cyan]")
             console.print(f"  [dim]{t('login_manual_hint')}[/dim]")
             questionary.press_any_key_to_continue(t("login_press_key"), style=_STYLE).ask()
+        else:
+            _info(t("login_hint_codex"))
     console.print()
 
 
@@ -275,7 +316,7 @@ def step_autostart(checks: dict) -> bool:
         return False
 
     from cchwc.server_runner import install_autostart
-    uv = checks.get("uv") or shutil.which("uv") or "uv"
+    uv = checks.get("uv") or _which("uv") or "uv"
     ok = install_autostart(uv_path=uv, install_dir=INSTALL_DIR)
     if ok:
         _ok(t("autostart_ok"))
@@ -329,10 +370,11 @@ def _install_integrations(do_mcp: bool) -> None:
     if mcp_path.exists():
         with open(mcp_path, encoding="utf-8") as f:
             existing = json.load(f)
-    uv_bin = shutil.which("uv") or "uv"
+    uv_bin = _which("uv") or "uv"
     existing.setdefault("mcpServers", {})["cchwc"] = {
         "command": uv_bin,
-        "args": ["run", "--project", str(INSTALL_DIR), "cchwc", "mcp-server"],
+        "args": ["run", "--no-dev", "--project", str(INSTALL_DIR), "cchwc", "mcp-server"],
+        "env": {"UV_CACHE_DIR": str(INSTALL_DIR / ".uv-cache")},
     }
     with open(mcp_path, "w", encoding="utf-8") as f:
         json.dump(existing, f, indent=2, ensure_ascii=False)
@@ -342,7 +384,8 @@ def step_scan(checks: dict, scan_roots: list[str] | None) -> None:
     console.print(Rule(f"[bold]{t('step_scan')}[/bold]", style="bright_black"))
     console.print()
     uv = checks.get("uv", "uv")
-    cmd = [uv, "run", "--project", str(INSTALL_DIR), "cchwc", "scan"]
+    _ensure_uv_cache_env()
+    cmd = [uv, "run", "--no-dev", "--project", str(INSTALL_DIR), "cchwc", "scan"]
     if scan_roots is None:
         cmd += ["--global"]
     else:
@@ -350,7 +393,7 @@ def step_scan(checks: dict, scan_roots: list[str] | None) -> None:
             cmd += ["--cwd", r]
 
     with Status(f"  {t('scanning')}", spinner="dots"):
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(INSTALL_DIR))
+        result = _run(cmd, cwd=str(INSTALL_DIR))
 
     for line in result.stdout.strip().splitlines():
         line = line.strip()
@@ -387,20 +430,94 @@ def step_done(autostart_ok: bool, integrations: dict) -> None:
 # entry point
 # ─────────────────────────────────────────────────────────────────
 
-def run_wizard() -> None:
+def _save_scope(scan_roots: list[str] | None) -> None:
+    from cchwc.config import save_scan_scope
+
+    if scan_roots is None:
+        save_scan_scope("global", [])
+    else:
+        save_scan_scope("project", scan_roots)
+
+
+def _scope_from_options(scope: str, roots: list[str] | None) -> list[str] | None:
+    normalized = scope.lower()
+    if normalized == "global":
+        return None
+    if normalized == "current":
+        return [str(Path.cwd())]
+    if normalized in {"custom", "project"}:
+        if roots:
+            return [str(Path(path).expanduser().resolve()) for path in roots]
+        return [str(Path.cwd())]
+    raise ValueError(f"Unsupported setup scope: {scope}")
+
+
+def run_wizard(
+    skip_deps: bool = False,
+    *,
+    non_interactive: bool = False,
+    lang: str = "en",
+    scope: str = "global",
+    roots: list[str] | None = None,
+    install_agent_clis: bool = False,
+    autostart: bool = False,
+    slash: bool = True,
+    mcp: bool = True,
+    scan: bool = True,
+) -> None:
     try:
-        step_language()
+        if non_interactive:
+            set_lang(lang)
+        else:
+            step_language()
         step_welcome()
         checks = step_prereqs()
         step_install_uv(checks)
-        step_sync_deps(checks)
-        step_claude_cli(checks)
-        step_codex_cli()
-        scan_roots = step_scope()
-        autostart_ok = step_autostart(checks)
-        integrations = step_integrations()
-        step_scan(checks, scan_roots)
+        if not skip_deps:
+            step_sync_deps(checks)
+        if non_interactive:
+            if install_agent_clis:
+                step_claude_cli(checks, interactive=False, install_missing=True)
+                step_codex_cli(checks, interactive=False, install_missing=True)
+            else:
+                _info(t("agent_cli_skip"))
+            scan_roots = _scope_from_options(scope, roots)
+        else:
+            step_claude_cli(checks)
+            step_codex_cli(checks)
+            scan_roots = step_scope()
+        _save_scope(scan_roots)
+        if non_interactive:
+            autostart_ok = install_autostart_noninteractive(checks) if autostart else False
+            integrations = install_integrations_noninteractive(slash=slash, mcp=mcp)
+        else:
+            autostart_ok = step_autostart(checks)
+            integrations = step_integrations()
+        if scan:
+            step_scan(checks, scan_roots)
         step_done(autostart_ok, integrations)
     except KeyboardInterrupt:
         console.print("\n\n  [dim]Setup cancelled.[/dim]\n")
         sys.exit(0)
+
+
+def install_autostart_noninteractive(checks: dict) -> bool:
+    from cchwc.server_runner import install_autostart
+
+    uv = checks.get("uv") or _which("uv") or "uv"
+    ok = install_autostart(uv_path=uv, install_dir=INSTALL_DIR)
+    if ok:
+        _ok(t("autostart_ok"))
+    else:
+        _fail(t("autostart_failed"))
+    return ok
+
+
+def install_integrations_noninteractive(*, slash: bool, mcp: bool) -> dict:
+    if slash or mcp:
+        try:
+            _install_integrations(mcp)
+            _ok(t("integration_ok"))
+        except Exception as e:
+            _fail(str(e))
+    return {"slash": slash, "mcp": mcp}

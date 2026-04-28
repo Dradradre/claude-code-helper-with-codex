@@ -94,19 +94,20 @@ bash install.sh
 ```powershell
 # Windows
 git clone https://github.com/Dradradre/claude-code-helper-with-codex; cd claude-code-helper-with-codex
-.\install.ps1
+.\install.cmd
 ```
 
 설치 마법사가 다음을 안내합니다:
 
 1. **uv** 설치 (없을 경우 자동)
-2. **Claude CLI** / **Codex CLI** 설치 (없을 경우)
-3. `claude login` / `codex login` 인증
-4. 스캔 범위 선택 (전체 or 특정 프로젝트)
-5. 초기 세션 인덱싱
-6. Claude Code 슬래시 커맨드 설치
+2. 커밋된 `uv.lock` 기준으로 Python 의존성 설치
+3. `npm`이 있으면 **Claude CLI** / **Codex CLI** 설치 선택
+4. 필요 시 `claude login` / `codex login` 인증 안내
+5. 스캔 범위 선택값 저장 (전체 or 특정 프로젝트)
+6. 초기 세션 인덱싱
+7. Claude Code 슬래시 커맨드와 MCP 설치 선택
 
-완료 후 **http://127.0.0.1:7878** 접속 🎉
+자동 시작을 켰다면 **http://127.0.0.1:7878** 로 접속하세요. 건너뛰었다면 `cchwc serve` 또는 `cchwc start --open`을 실행하면 됩니다.
 
 ### 방법 B — 원클릭 (새 PC)
 
@@ -126,13 +127,22 @@ irm https://raw.githubusercontent.com/Dradradre/claude-code-helper-with-codex/ma
 
 | 의존성 | 필수 여부 | 역할 |
 |--------|-----------|------|
-| Python 3.11+ | ✅ | 런타임 (uv가 자동 관리) |
+| Python 3.11+ | ✅ | 런타임 (`uv.lock` 기준으로 uv가 준비) |
 | [uv](https://docs.astral.sh/uv/) | ✅ | 패키지 매니저 — 자동 설치 |
-| Node.js + npm | ✅ | Claude/Codex CLI 설치에 필요 |
+| Node.js + npm | ⚡ | Claude/Codex CLI 자동 설치에만 필요 |
 | [Claude Code CLI](https://docs.anthropic.com/claude-code) | ⚡ | 세션 인덱싱 + 오케스트레이션 |
 | [Codex CLI](https://github.com/openai/codex) | ⚡ | 세션 인덱싱 + 오케스트레이션 |
 
 > ⚡ CLI 없이도 웹 대시보드와 세션 뷰어는 작동합니다. 오케스트레이션 모드는 양쪽 CLI 인증 필요.
+
+### 재현 가능한 설치 동작
+
+- 의존성은 `uv sync --frozen --no-dev`로 설치되며, 커밋된 `uv.lock`이 기준입니다.
+- installer는 `UV_CACHE_DIR`을 `<설치 경로>/.uv-cache`로 지정해 사용자 전역 uv 캐시 권한 문제를 피합니다.
+- Windows installer는 PowerShell 5.1 호환 문법을 사용하고, `npm.ps1` 실행 정책 문제를 피하기 위해 `npm.cmd`를 사용합니다.
+- 클론 후 설치는 `install.cmd`가 `install.ps1`을 프로세스 한정 `ExecutionPolicy Bypass`로 실행합니다.
+- 설치 경로나 저장소 URL을 바꾸려면 실행 전에 `CCHWC_INSTALL_DIR` 또는 `CCHWC_REPO`를 설정하세요.
+- CI나 반복 smoke test에서는 `CCHWC_SETUP_NONINTERACTIVE=1`을 설정하고 `CCHWC_SETUP_SCOPE`, `CCHWC_SETUP_AUTOSTART`, `CCHWC_SETUP_SLASH`, `CCHWC_SETUP_MCP`, `CCHWC_SETUP_SCAN`으로 동작을 조정할 수 있습니다.
 
 ---
 

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 INSTALL_DIR = Path(__file__).parent.parent.parent.resolve()
 
 
-async def serve_all(open_browser: bool = False) -> None:
+async def serve_all(open_browser: bool = False, host: str | None = None, port: int | None = None) -> None:
     """DB 초기화 → 자동 스캔(필요 시) → watcher → 웹 서버를 단일 프로세스로 실행."""
     import uvicorn
     from sqlalchemy import func, select
@@ -27,6 +27,10 @@ async def serve_all(open_browser: bool = False) -> None:
     from cchwc.server.app import create_app
 
     settings = Settings()
+    if host is not None:
+        settings.host = host
+    if port is not None:
+        settings.port = port
 
     # ── 1. DB init ──────────────────────────────────────────────
     engine = get_engine(settings)
@@ -144,6 +148,8 @@ def _autostart_macos(uv: str, base: Path) -> bool:
     plist_dir = Path.home() / "Library" / "LaunchAgents"
     plist_dir.mkdir(parents=True, exist_ok=True)
     plist = plist_dir / f"{label}.plist"
+    uv_cache = base / ".uv-cache"
+    uv_cache.mkdir(parents=True, exist_ok=True)
 
     plist.write_text(f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -154,11 +160,17 @@ def _autostart_macos(uv: str, base: Path) -> bool:
   <array>
     <string>{uv}</string>
     <string>run</string>
+    <string>--no-dev</string>
     <string>--project</string>
     <string>{base}</string>
     <string>cchwc</string>
     <string>serve</string>
   </array>
+  <key>WorkingDirectory</key><string>{base}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>UV_CACHE_DIR</key><string>{uv_cache}</string>
+  </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>{log_dir}/cchwc.log</string>
@@ -181,8 +193,16 @@ def _autostart_windows(uv: str, base: Path) -> bool:
     startup = _win_startup_dir()
     startup.mkdir(parents=True, exist_ok=True)
     bat = startup / "cchwc.bat"
+    uv_cache = base / ".uv-cache"
+    uv_cache.mkdir(parents=True, exist_ok=True)
+    content = (
+        "@echo off\n"
+        f'set "UV_CACHE_DIR={uv_cache}"\n'
+        f'cd /d "{base}"\n'
+        f'start /min "" "{uv}" run --no-dev --project "{base}" cchwc serve\n'
+    )
     bat.write_text(
-        f'@echo off\nstart /min "" "{uv}" run --project "{base}" cchwc serve\n',
+        content,
         encoding="utf-8",
     )
     return True
@@ -192,12 +212,16 @@ def _autostart_linux(uv: str, base: Path) -> bool:
     svc_dir = Path.home() / ".config" / "systemd" / "user"
     svc_dir.mkdir(parents=True, exist_ok=True)
     svc = svc_dir / "cchwc.service"
+    uv_cache = base / ".uv-cache"
+    uv_cache.mkdir(parents=True, exist_ok=True)
     svc.write_text(f"""[Unit]
 Description=cchwc — Claude Code + Codex Session Hub
 After=network.target
 
 [Service]
-ExecStart={uv} run --project {base} cchwc serve
+WorkingDirectory="{base}"
+Environment="UV_CACHE_DIR={uv_cache}"
+ExecStart="{uv}" run --no-dev --project "{base}" cchwc serve
 Restart=on-failure
 RestartSec=5
 

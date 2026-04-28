@@ -45,6 +45,7 @@ ignore = ["B008"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 pythonpath = ["src"]
+addopts = ["-p", "no:cacheprovider"]
 
 [dependency-groups]
 dev = [

@@ -1,51 +1,85 @@
 #!/usr/bin/env bash
-# cchwc 설치 스크립트 (macOS / Linux)
+# cchwc installer for macOS / Linux
 #
-# 사용법 A — 클론 후:
-#   git clone https://github.com/Dradradre/claude-code-helper-with-codex && cd cchwc && bash install.sh
+# Clone first:
+#   git clone https://github.com/Dradradre/claude-code-helper-with-codex && cd claude-code-helper-with-codex && bash install.sh
 #
-# 사용법 B — 원클릭 (클론 포함):
+# One-liner:
 #   curl -LsSf https://raw.githubusercontent.com/Dradradre/claude-code-helper-with-codex/main/install.sh | bash
 
-set -e
+set -Eeuo pipefail
 
-REPO_URL="https://github.com/Dradradre/claude-code-helper-with-codex"  
-INSTALL_DIR="$HOME/cchwc"
+DEFAULT_REPO_URL="https://github.com/Dradradre/claude-code-helper-with-codex"
+REPO_URL="${CCHWC_REPO:-$DEFAULT_REPO_URL}"
 
-# ── 이미 repo 안에서 실행 중인지 확인 ────────────────────────────
-SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || pwd)"
-if [ -f "$SELF_DIR/pyproject.toml" ]; then
+log() {
+  printf '[*] %s\n' "$1"
+}
+
+warn() {
+  printf '[!] %s\n' "$1" >&2
+}
+
+is_cchwc_repo() {
+  local dir="$1"
+  [ -f "$dir/pyproject.toml" ] && grep -Eq 'name[[:space:]]*=[[:space:]]*"cchwc"' "$dir/pyproject.toml"
+}
+
+script_dir() {
+  local source="${BASH_SOURCE[0]:-$0}"
+  if [ -n "$source" ] && [ "$source" != "bash" ] && [ -f "$source" ]; then
+    cd "$(dirname "$source")" >/dev/null 2>&1 && pwd
+  fi
+}
+
+SELF_DIR="$(script_dir || true)"
+if [ -n "${CCHWC_INSTALL_DIR:-}" ]; then
+  INSTALL_DIR="$CCHWC_INSTALL_DIR"
+elif [ -n "$SELF_DIR" ] && is_cchwc_repo "$SELF_DIR"; then
   INSTALL_DIR="$SELF_DIR"
+else
+  INSTALL_DIR="$HOME/cchwc"
+fi
+INSTALL_PARENT="$(dirname "$INSTALL_DIR")"
+mkdir -p "$INSTALL_PARENT"
+INSTALL_DIR="$(cd "$INSTALL_PARENT" && pwd)/$(basename "$INSTALL_DIR")"
+
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+
+if ! command -v uv >/dev/null 2>&1; then
+  log "Installing uv package manager"
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 fi
 
-# ── Node.js 확인 ──────────────────────────────────────────────────
-if ! command -v node &>/dev/null; then
-  echo "[!] Node.js가 필요합니다: https://nodejs.org"
+if ! command -v uv >/dev/null 2>&1; then
+  warn "uv install failed. Install manually: https://docs.astral.sh/uv/"
   exit 1
 fi
 
-# ── uv 설치 ──────────────────────────────────────────────────────
-if ! command -v uv &>/dev/null && ! [ -x "$HOME/.local/bin/uv" ]; then
-  echo "[*] uv 패키지 매니저 설치 중..."
-  curl -LsSf https://astral.sh/uv/install.sh | sh
-  export PATH="$HOME/.local/bin:$PATH"
-fi
-
-export PATH="$HOME/.local/bin:$PATH"
-
-# ── repo 클론 (필요한 경우만) ─────────────────────────────────────
-if [ ! -f "$INSTALL_DIR/pyproject.toml" ]; then
-  if [ -z "$CCHWC_REPO" ]; then
-    read -rp "[?] Git 저장소 URL [$REPO_URL]: " input
-    CCHWC_REPO="${input:-$REPO_URL}"
+if ! is_cchwc_repo "$INSTALL_DIR"; then
+  if ! command -v git >/dev/null 2>&1; then
+    warn "git is required to clone cchwc: https://git-scm.com/downloads"
+    exit 1
   fi
-  git clone "$CCHWC_REPO" "$INSTALL_DIR"
+
+  if [ -e "$INSTALL_DIR" ] && [ "$(find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 2>/dev/null | head -n 1)" ]; then
+    warn "Install directory exists but is not cchwc: $INSTALL_DIR"
+    warn "Remove it, choose CCHWC_INSTALL_DIR, or run install.sh inside a cloned repo."
+    exit 1
+  fi
+
+  log "Cloning $REPO_URL to $INSTALL_DIR"
+  git clone "$REPO_URL" "$INSTALL_DIR"
 fi
 
-# ── 의존성 설치 ───────────────────────────────────────────────────
-cd "$INSTALL_DIR"
-uv sync
+export UV_CACHE_DIR="${UV_CACHE_DIR:-$INSTALL_DIR/.uv-cache}"
+mkdir -p "$UV_CACHE_DIR"
 
-# ── 설치 마법사 ──────────────────────────────────────────────────
-echo ""
-uv run cchwc setup
+cd "$INSTALL_DIR"
+
+log "Installing Python dependencies from uv.lock"
+uv sync --frozen --no-dev
+
+log "Starting setup wizard"
+uv run --no-dev cchwc setup --skip-deps

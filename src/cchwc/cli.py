@@ -15,6 +15,77 @@ console = Console()
 _PID_FILE = Path.home() / ".cchwc" / "cchwc.pid"
 
 
+def _server_url() -> str:
+    from cchwc.config import Settings
+
+    settings = Settings()
+    return f"http://{settings.host}:{settings.port}"
+
+
+def _server_health_ok(timeout: float = 1.0) -> bool:
+    import json
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(f"{_server_url()}/health", timeout=timeout) as response:
+            if response.status != 200:
+                return False
+            return json.loads(response.read().decode("utf-8")).get("status") == "ok"
+    except Exception:
+        return False
+
+
+def _pid_exists(pid: int) -> bool:
+    import ctypes
+    import os
+    import platform
+
+    if platform.system() == "Windows":
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        process_query = 0x1000  # PROCESS_QUERY_LIMITED_INFORMATION
+        still_active = 259
+        handle = kernel32.OpenProcess(process_query, False, pid)
+        if not handle:
+            return ctypes.get_last_error() == 5  # Access denied means the PID exists.
+        try:
+            exit_code = ctypes.c_ulong()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                return True
+            return exit_code.value == still_active
+        finally:
+            kernel32.CloseHandle(handle)
+
+    try:
+        os.kill(pid, 0)
+        return True
+    except (OSError, SystemError):
+        return False
+
+
+def _terminate_pid(pid: int) -> bool:
+    import ctypes
+    import os
+    import platform
+    import signal
+
+    if platform.system() == "Windows":
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        process_terminate = 0x0001
+        handle = kernel32.OpenProcess(process_terminate, False, pid)
+        if not handle:
+            return not _pid_exists(pid)
+        try:
+            return bool(kernel32.TerminateProcess(handle, 0))
+        finally:
+            kernel32.CloseHandle(handle)
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+        return True
+    except (OSError, SystemError):
+        return False
+
+
 @app.command()
 def serve(
     host: str = typer.Option("127.0.0.1", help="서버 호스트"),
@@ -23,7 +94,7 @@ def serve(
 ) -> None:
     """웹 서버 + watchdog을 포그라운드로 실행합니다. (Ctrl+C로 종료)"""
     from cchwc.server_runner import serve_all
-    asyncio.run(serve_all(open_browser=open_browser))
+    asyncio.run(serve_all(open_browser=open_browser, host=host, port=port))
 
 
 @app.command()
@@ -31,20 +102,17 @@ def start(
     open_browser: bool = typer.Option(False, "--open", help="시작 후 브라우저 열기"),
 ) -> None:
     """백그라운드에서 서버를 시작합니다."""
-    import os
     import subprocess
     import sys
 
     if _PID_FILE.exists():
         pid = int(_PID_FILE.read_text().strip())
-        try:
-            os.kill(pid, 0)
-            console.print(f"  [yellow]이미 실행 중[/yellow] (PID {pid})  →  http://127.0.0.1:7878")
+        if _pid_exists(pid) and _server_health_ok():
+            console.print(f"  [yellow]이미 실행 중[/yellow] (PID {pid})  →  {_server_url()}")
             if open_browser:
                 _do_open()
             return
-        except OSError:
-            _PID_FILE.unlink(missing_ok=True)
+        _PID_FILE.unlink(missing_ok=True)
 
     exe = sys.executable
     log_dir = Path.home() / ".cchwc"
@@ -60,7 +128,7 @@ def start(
     )
     _PID_FILE.parent.mkdir(parents=True, exist_ok=True)
     _PID_FILE.write_text(str(proc.pid))
-    console.print(f"  [green]✓[/green]  cchwc started (PID {proc.pid})  →  http://127.0.0.1:7878")
+    console.print(f"  [green]✓[/green]  cchwc started (PID {proc.pid})  →  {_server_url()}")
     console.print(f"  [dim]log: {log_path}[/dim]")
     if open_browser:
         import time
@@ -71,35 +139,32 @@ def start(
 @app.command()
 def stop() -> None:
     """실행 중인 백그라운드 서버를 종료합니다."""
-    import os
-    import signal
-
     if not _PID_FILE.exists():
         console.print("  [dim]실행 중인 서버가 없습니다.[/dim]")
         return
     pid = int(_PID_FILE.read_text().strip())
-    try:
-        os.kill(pid, signal.SIGTERM)
-        _PID_FILE.unlink(missing_ok=True)
-        console.print(f"  [green]✓[/green]  cchwc stopped (PID {pid})")
-    except ProcessLookupError:
+    if not _server_health_ok():
         _PID_FILE.unlink(missing_ok=True)
         console.print("  [dim]프로세스가 이미 종료되어 있었습니다.[/dim]")
+        return
+    if _terminate_pid(pid):
+        _PID_FILE.unlink(missing_ok=True)
+        console.print(f"  [green]✓[/green]  cchwc stopped (PID {pid})")
+    else:
+        _PID_FILE.unlink(missing_ok=True)
+        console.print(f"  [red]✗[/red]  cchwc stop failed; stale PID removed ({pid})")
 
 
 @app.command()
 def status() -> None:
     """서버 실행 상태를 확인합니다."""
-    import os
-
     if not _PID_FILE.exists():
         console.print("  [dim]●[/dim]  cchwc  [dim]stopped[/dim]")
         return
     pid = int(_PID_FILE.read_text().strip())
-    try:
-        os.kill(pid, 0)
-        console.print(f"  [green]●[/green]  cchwc  [green]running[/green]  (PID {pid})  →  http://127.0.0.1:7878")
-    except OSError:
+    if _pid_exists(pid) and _server_health_ok():
+        console.print(f"  [green]●[/green]  cchwc  [green]running[/green]  (PID {pid})  →  {_server_url()}")
+    else:
         _PID_FILE.unlink(missing_ok=True)
         console.print("  [red]●[/red]  cchwc  [dim]crashed (PID file stale)[/dim]")
 
@@ -116,9 +181,7 @@ def uninstall(
     yes: bool = typer.Option(False, "--yes", "-y", help="확인 없이 바로 실행"),
 ) -> None:
     """cchwc를 제거합니다 (autostart 해제 + 데이터 삭제)."""
-    import os
     import shutil as _shutil
-    import signal
 
     if not yes:
         console.print("[bold red]이 작업은 되돌릴 수 없습니다.[/bold red]")
@@ -131,8 +194,8 @@ def uninstall(
     if _PID_FILE.exists():
         try:
             pid = int(_PID_FILE.read_text().strip())
-            os.kill(pid, signal.SIGTERM)
-            console.print(f"  [green]✓[/green]  서버 종료 (PID {pid})")
+            if _terminate_pid(pid):
+                console.print(f"  [green]✓[/green]  서버 종료 (PID {pid})")
         except (OSError, ValueError):
             pass
         _PID_FILE.unlink(missing_ok=True)
@@ -278,10 +341,11 @@ app.add_typer(config_app, name="config")
 @config_app.command("show")
 def config_show() -> None:
     """현재 설정을 출력합니다."""
-    from cchwc.config import Settings
+    from cchwc.config import Settings, get_config_path
     s = Settings()
+    console.print(f"config     : {get_config_path()}")
     console.print(f"scan_mode  : [bold]{s.scan_mode}[/bold]")
-    console.print(f"scan_roots : {s.scan_roots or '(설정 없음 — 현재 디렉토리 기본값)'}")
+    console.print(f"scan_roots : {s.scan_roots or '(none)'}")
     console.print(f"db_path    : {s.db_path}")
     console.print(f"port       : {s.port}")
 
@@ -317,36 +381,30 @@ def config_set_project() -> None:
 
 
 def _write_config(action: str, value: str) -> None:
-    import tomllib
+    from cchwc.config import read_user_config, write_user_config
 
-    import tomli_w  # type: ignore[import]
-    config_path = Path.home() / ".cchwc" / "config.toml"
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-
-    data: dict = {}
-    if config_path.exists():
-        with open(config_path, "rb") as f:
-            data = tomllib.load(f)
+    data = read_user_config()
+    scan = data.setdefault("scan", {})
 
     if action == "mode":
-        data.setdefault("scan", {})["mode"] = value
+        scan["mode"] = value
     elif action == "add":
-        roots = data.setdefault("scan", {}).setdefault("roots", [])
+        scan["mode"] = "project"
+        roots = scan.setdefault("roots", [])
         if value not in roots:
             roots.append(value)
             console.print(f"[green]추가됨: {value}[/green]")
         else:
             console.print(f"[yellow]이미 존재: {value}[/yellow]")
     elif action == "remove":
-        roots = data.get("scan", {}).get("roots", [])
+        roots = scan.get("roots", [])
         if value in roots:
             roots.remove(value)
             console.print(f"[green]제거됨: {value}[/green]")
         else:
             console.print(f"[yellow]목록에 없음: {value}[/yellow]")
 
-    with open(config_path, "wb") as f:
-        tomli_w.dump(data, f)
+    write_user_config(data)
 
 
 # ──────────────────────────────────────────
@@ -372,7 +430,7 @@ def doctor() -> None:
     """환경 점검을 수행합니다."""
     import shutil
 
-    from cchwc.config import Settings
+    from cchwc.config import Settings, get_config_path
     settings = Settings()
 
     console.print("[bold]cchwc doctor[/bold]\n")
@@ -381,6 +439,7 @@ def doctor() -> None:
     codex_path = shutil.which(settings.codex_bin)
     node_path = shutil.which("node")
     npm_path = shutil.which("npm")
+    uv_path = shutil.which("uv")
 
     def ok(label, path):
         if path:
@@ -392,8 +451,10 @@ def doctor() -> None:
     ok("codex CLI",  codex_path)
     ok("node",       node_path)
     ok("npm",        npm_path)
+    ok("uv",         uv_path)
 
     console.print()
+    console.print(f"  config     : {get_config_path()} ({'exists' if get_config_path().exists() else 'not yet'})")
     console.print(f"  DB path    : {settings.db_path} ({'exists' if settings.db_path.exists() else 'not yet'})")
     console.print(f"  Claude root: {settings.claude_root} ({'✓' if settings.claude_root.exists() else '✗'})")
     console.print(f"  Codex root : {settings.codex_root} ({'✓' if settings.codex_root.exists() else '✗'})")
@@ -470,10 +531,57 @@ async def _run_mode(mode: str, prompt: str, cwd: str, config: dict | None = None
 # ──────────────────────────────────────────
 
 @app.command()
-def setup() -> None:
+def setup(
+    skip_deps: bool = typer.Option(False, "--skip-deps", help="이미 uv sync를 실행한 경우 의존성 동기화 생략"),
+    yes: bool = typer.Option(False, "--yes", "-y", envvar="CCHWC_SETUP_NONINTERACTIVE", help="비대화형 기본 설정 사용"),
+    lang: str = typer.Option("en", "--lang", envvar="CCHWC_SETUP_LANG", help="'en' 또는 'ko'"),
+    scope: str = typer.Option("global", "--scope", envvar="CCHWC_SETUP_SCOPE", help="'global', 'current', 'project'"),
+    cwd: list[str] = typer.Option([], "--cwd", "-c", help="비대화형 project scope에서 저장할 경로"),
+    install_agent_clis: bool = typer.Option(
+        False,
+        "--install-agent-clis/--no-agent-clis",
+        envvar="CCHWC_SETUP_INSTALL_AGENT_CLIS",
+        help="비대화형 모드에서 Claude/Codex CLI 자동 설치",
+    ),
+    autostart: bool = typer.Option(
+        False,
+        "--autostart/--no-autostart",
+        envvar="CCHWC_SETUP_AUTOSTART",
+        help="비대화형 모드에서 자동 시작 등록",
+    ),
+    slash: bool = typer.Option(
+        True,
+        "--slash/--no-slash",
+        envvar="CCHWC_SETUP_SLASH",
+        help="비대화형 모드에서 Claude Code 슬래시 커맨드 설치",
+    ),
+    mcp: bool = typer.Option(
+        True,
+        "--mcp/--no-mcp",
+        envvar="CCHWC_SETUP_MCP",
+        help="비대화형 모드에서 MCP 등록",
+    ),
+    scan: bool = typer.Option(
+        True,
+        "--scan/--no-scan",
+        envvar="CCHWC_SETUP_SCAN",
+        help="비대화형 모드에서 초기 스캔 실행",
+    ),
+) -> None:
     """대화형 설치 마법사를 실행합니다."""
     from cchwc.setup_wizard import run_wizard
-    run_wizard()
+    run_wizard(
+        skip_deps=skip_deps,
+        non_interactive=yes,
+        lang=lang,
+        scope=scope,
+        roots=cwd,
+        install_agent_clis=install_agent_clis,
+        autostart=autostart,
+        slash=slash,
+        mcp=mcp,
+        scan=scan,
+    )
 
 
 # ──────────────────────────────────────────
@@ -569,9 +677,8 @@ def install_commands(
     설치 후 Claude Code에서 /cchwc-compare, /cchwc-review, /cchwc-debate 사용 가능.
     """
     import shutil
-    import sys
 
-    install_dir = Path(sys.executable).parent.parent.resolve()
+    install_dir = INSTALL_DIR
 
     base = Path.home() / ".claude" if scope == "global" else Path.cwd() / ".claude"
 
@@ -602,7 +709,8 @@ def install_commands(
     uv_path = shutil.which("uv") or "uv"
     existing.setdefault("mcpServers", {})["cchwc"] = {
         "command": uv_path,
-        "args": ["run", "--project", str(install_dir), "cchwc", "mcp-server"],
+        "args": ["run", "--no-dev", "--project", str(install_dir), "cchwc", "mcp-server"],
+        "env": {"UV_CACHE_DIR": str(install_dir / ".uv-cache")},
         "description": "cchwc — Claude+Codex 오케스트레이션 (compare/review/debate)",
     }
 

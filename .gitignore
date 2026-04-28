@@ -13,6 +13,9 @@ build/
 .venv/
 venv/
 env/
+.uv-cache/
+.tmp/
+.pytest-tmp/
 
 # IDE
 .idea/

@@ -23,6 +23,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "step_done":             "Setup complete",
         # ── prereqs ───────────────────────────────────────────────
         "node_missing":          "Node.js is required → https://nodejs.org (LTS)",
+        "npm_missing":           "npm was not found. Claude/Codex CLI auto-install will be skipped.",
+        "npm_missing_cli":       "Install manually after npm is available: npm install -g {package}",
         "uv_install_prompt":     "uv package manager not found. Install it now?",
         "uv_install_failed":     "uv installation failed. Install manually: https://docs.astral.sh/uv/",
         # ── claude / codex ────────────────────────────────────────
@@ -54,6 +56,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "slash_prompt":          "Install Claude Code slash commands? (/cchwc-compare, /cchwc-review, /cchwc-debate)",
         "mcp_prompt":            "Register MCP server? (native tool-call in Claude Code)",
         "integration_ok":        "Installed.",
+        "agent_cli_skip":        "Skipping Claude/Codex CLI installation.",
         # ── scan ─────────────────────────────────────────────────
         "scanning":              "Indexing sessions…",
         "scan_result":           "{agent}: {parsed} sessions indexed",
@@ -90,6 +93,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "step_scan":             "초기 세션 인덱싱",
         "step_done":             "설치 완료",
         "node_missing":          "Node.js가 필요합니다 → https://nodejs.org (LTS)",
+        "npm_missing":           "npm을 찾을 수 없습니다. Claude/Codex CLI 자동 설치는 건너뜁니다.",
+        "npm_missing_cli":       "npm 사용 가능 후 수동 설치: npm install -g {package}",
         "uv_install_prompt":     "uv 패키지 매니저가 없습니다. 지금 설치할까요?",
         "uv_install_failed":     "uv 설치 실패. 수동 설치: https://docs.astral.sh/uv/",
         "install_claude_prompt": "Claude CLI가 없습니다. 설치할까요? (npm install -g @anthropic-ai/claude-code)",
@@ -117,6 +122,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "slash_prompt":          "Claude Code 슬래시 커맨드를 설치할까요? (/cchwc-compare 등)",
         "mcp_prompt":            "MCP 서버를 등록할까요? (Claude Code에서 네이티브 tool call 사용)",
         "integration_ok":        "설치 완료.",
+        "agent_cli_skip":        "Claude/Codex CLI 설치를 건너뜁니다.",
         "scanning":              "세션 인덱싱 중…",
         "scan_result":           "{agent}: {parsed}개 세션 인덱싱 완료",
         "done_autostart_on":     "cchwc가 로그인 시 자동으로 시작됩니다.",

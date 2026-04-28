@@ -1,49 +1,113 @@
-# cchwc 설치 스크립트 (Windows PowerShell)
+# cchwc installer for Windows PowerShell 5.1+
 #
-# 사용법 A — 클론 후:
-#   git clone https://github.com/Dradradre/claude-code-helper-with-codex; cd cchwc; .\install.ps1
+# Clone first:
+#   git clone https://github.com/Dradradre/claude-code-helper-with-codex; cd claude-code-helper-with-codex; .\install.ps1
 #
-# 사용법 B — 원클릭 (클론 포함):
+# One-liner:
 #   irm https://raw.githubusercontent.com/Dradradre/claude-code-helper-with-codex/main/install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
-$REPO_URL = "https://github.com/Dradradre/claude-code-helper-with-codex"  
 
-# ── 이미 repo 안에서 실행 중인지 확인 ────────────────────────────
-$SelfDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-if (-not $SelfDir) { $SelfDir = Get-Location }
-$InstallDir = if (Test-Path "$SelfDir\pyproject.toml") { $SelfDir } else { "$env:USERPROFILE\cchwc" }
+$DefaultRepoUrl = "https://github.com/Dradradre/claude-code-helper-with-codex"
+$RepoUrl = if ($env:CCHWC_REPO) { $env:CCHWC_REPO } else { $DefaultRepoUrl }
 
-# ── Node.js 확인 ──────────────────────────────────────────────────
-if (-not (Get-Command "node" -ErrorAction SilentlyContinue)) {
-    Write-Host "[!] Node.js가 필요합니다: https://nodejs.org" -ForegroundColor Yellow
+function Write-Step($Message) {
+    Write-Host "[*] $Message" -ForegroundColor Cyan
+}
+
+function Write-Fail($Message) {
+    Write-Host "[!] $Message" -ForegroundColor Yellow
+}
+
+function Get-CommandPath($Name) {
+    $cmd = Get-Command $Name -CommandType Application -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+    return $null
+}
+
+function Test-CchwcRepo($Path) {
+    $pyproject = Join-Path $Path "pyproject.toml"
+    if (-not (Test-Path $pyproject)) { return $false }
+    return [bool](Select-String -Path $pyproject -Pattern 'name\s*=\s*"cchwc"' -Quiet)
+}
+
+function Invoke-Checked($FilePath, [string[]]$Arguments) {
+    & $FilePath @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+    }
+}
+
+function Get-ScriptDirectory {
+    if ($PSScriptRoot) { return $PSScriptRoot }
+    if ($MyInvocation.MyCommand.Path) {
+        return Split-Path -Parent $MyInvocation.MyCommand.Path
+    }
+    return $null
+}
+
+$SelfDir = Get-ScriptDirectory
+if ($env:CCHWC_INSTALL_DIR) {
+    $InstallDir = $env:CCHWC_INSTALL_DIR
+} elseif ($SelfDir -and (Test-CchwcRepo $SelfDir)) {
+    $InstallDir = $SelfDir
+} else {
+    $InstallDir = Join-Path $env:USERPROFILE "cchwc"
+}
+$InstallDir = [System.IO.Path]::GetFullPath($InstallDir)
+
+$UvPath = Get-CommandPath "uv"
+if (-not $UvPath) {
+    $UvPath = Join-Path $env:USERPROFILE ".local\bin\uv.exe"
+}
+
+if (-not (Test-Path $UvPath)) {
+    Write-Step "Installing uv package manager"
+    irm https://astral.sh/uv/install.ps1 | iex
+    $env:PATH = "$env:USERPROFILE\.local\bin;$env:PATH"
+    $UvPath = Get-CommandPath "uv"
+    if (-not $UvPath) {
+        $UvPath = Join-Path $env:USERPROFILE ".local\bin\uv.exe"
+    }
+}
+
+if (-not (Test-Path $UvPath)) {
+    Write-Fail "uv install failed. Install manually: https://docs.astral.sh/uv/"
     exit 1
 }
 
-# ── uv 설치 ──────────────────────────────────────────────────────
-$uvPath = (Get-Command "uv" -ErrorAction SilentlyContinue)?.Source
-if (-not $uvPath) { $uvPath = "$env:USERPROFILE\.local\bin\uv.exe" }
+if (-not (Test-CchwcRepo $InstallDir)) {
+    $GitPath = Get-CommandPath "git"
+    if (-not $GitPath) {
+        Write-Fail "git is required to clone cchwc: https://git-scm.com/download/win"
+        exit 1
+    }
 
-if (-not (Test-Path $uvPath)) {
-    Write-Host "[*] uv 패키지 매니저 설치 중..." -ForegroundColor Cyan
-    irm https://astral.sh/uv/install.ps1 | iex
-    $env:PATH = "$env:USERPROFILE\.local\bin;$env:PATH"
+    if (Test-Path $InstallDir) {
+        $items = Get-ChildItem -LiteralPath $InstallDir -Force -ErrorAction SilentlyContinue
+        if ($items) {
+            Write-Fail "Install directory exists but is not cchwc: $InstallDir"
+            Write-Fail "Remove it, choose CCHWC_INSTALL_DIR, or run install.cmd inside a cloned repo."
+            exit 1
+        }
+    }
+
+    Write-Step "Cloning $RepoUrl to $InstallDir"
+    Invoke-Checked $GitPath @("clone", $RepoUrl, $InstallDir)
 }
 
-$env:PATH = "$env:USERPROFILE\.local\bin;$env:PATH"
-
-# ── repo 클론 (필요한 경우만) ─────────────────────────────────────
-if (-not (Test-Path "$InstallDir\pyproject.toml")) {
-    $input = Read-Host "[?] Git 저장소 URL [$REPO_URL]"
-    if ($input) { $REPO_URL = $input }
-    git clone $REPO_URL $InstallDir
+if (-not $env:UV_CACHE_DIR) {
+    $env:UV_CACHE_DIR = Join-Path $InstallDir ".uv-cache"
 }
+New-Item -ItemType Directory -Force -Path $env:UV_CACHE_DIR | Out-Null
 
-# ── 의존성 설치 ───────────────────────────────────────────────────
 Push-Location $InstallDir
-uv sync
+try {
+    Write-Step "Installing Python dependencies from uv.lock"
+    Invoke-Checked $UvPath @("sync", "--frozen", "--no-dev")
 
-# ── 설치 마법사 ──────────────────────────────────────────────────
-Write-Host ""
-uv run cchwc setup
-Pop-Location
+    Write-Step "Starting setup wizard"
+    Invoke-Checked $UvPath @("run", "--no-dev", "cchwc", "setup", "--skip-deps")
+} finally {
+    Pop-Location
+}

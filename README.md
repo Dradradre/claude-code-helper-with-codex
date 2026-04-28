@@ -98,18 +98,19 @@ bash install.sh
 ```powershell
 # Windows
 git clone https://github.com/Dradradre/claude-code-helper-with-codex; cd claude-code-helper-with-codex
-.\install.ps1
+.\install.cmd
 ```
 
 The installer will:
 1. Install **uv** (Python package manager) if needed
-2. Install **Claude CLI** and **Codex CLI** if needed  
-3. Guide you through `claude login` / `codex login`
-4. Let you choose scan scope (global or specific projects)
-5. Run the initial session index
-6. Install Claude Code slash commands (`/cchwc-compare` etc.)
+2. Install Python dependencies from the committed `uv.lock`
+3. Optionally install **Claude CLI** and **Codex CLI** if `npm` is available
+4. Guide you through `claude login` / `codex login` when needed
+5. Persist your scan scope choice (global or specific projects)
+6. Run the initial session index
+7. Optionally install Claude Code slash commands and MCP (`/cchwc-compare` etc.)
 
-Then open **http://127.0.0.1:7878** 🎉
+If auto-start is enabled, open **http://127.0.0.1:7878**. Otherwise run `cchwc serve` or `cchwc start --open`.
 
 ### Option B — One-liner (fresh machine)
 
@@ -127,13 +128,22 @@ irm https://raw.githubusercontent.com/Dradradre/claude-code-helper-with-codex/ma
 
 | Dependency | Required | Purpose |
 |------------|----------|---------|
-| Python 3.11+ | ✅ | Runtime (managed by uv) |
+| Python 3.11+ | ✅ | Runtime (resolved by uv from `uv.lock`) |
 | [uv](https://docs.astral.sh/uv/) | ✅ | Package manager — auto-installed |
-| Node.js + npm | ✅ | Needed to install Claude/Codex CLIs |
+| Node.js + npm | ⚡ | Needed only to auto-install Claude/Codex CLIs |
 | [Claude Code CLI](https://docs.anthropic.com/claude-code) | ⚡ | Session indexing + orchestration |
 | [Codex CLI](https://github.com/openai/codex) | ⚡ | Session indexing + orchestration |
 
 > ⚡ The web dashboard and session viewer work without these. Orchestration modes require both CLIs to be authenticated.
+
+### Deterministic installer behavior
+
+- Dependencies are installed with `uv sync --frozen --no-dev`, so the committed `uv.lock` is the source of truth.
+- The installer sets `UV_CACHE_DIR` to `<install-dir>/.uv-cache` to avoid user-global uv cache permission issues.
+- Windows uses PowerShell 5.1-compatible syntax and avoids `npm.ps1` execution-policy issues by resolving `npm.cmd`.
+- `install.cmd` launches `install.ps1` with process-local `ExecutionPolicy Bypass` for cloned installs.
+- Set `CCHWC_INSTALL_DIR` or `CCHWC_REPO` before running the installer to override the install directory or repository URL.
+- For CI or repeatable smoke tests, set `CCHWC_SETUP_NONINTERACTIVE=1` and tune `CCHWC_SETUP_SCOPE`, `CCHWC_SETUP_AUTOSTART`, `CCHWC_SETUP_SLASH`, `CCHWC_SETUP_MCP`, and `CCHWC_SETUP_SCAN`.
 
 ---
 
