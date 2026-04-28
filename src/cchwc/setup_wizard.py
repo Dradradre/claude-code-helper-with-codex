@@ -170,6 +170,14 @@ def step_sync_deps(checks: dict) -> None:
     else:
         _fail(result.stderr[:300])
         sys.exit(1)
+
+    with Status(f"  {t('registering_cmd')}", spinner="dots"):
+        result = _run([uv, "tool", "install", "--editable", str(INSTALL_DIR)])
+    if result.returncode == 0:
+        _ok("cchwc")
+    else:
+        _fail(result.stderr[:300])
+        sys.exit(1)
     console.print()
 
 

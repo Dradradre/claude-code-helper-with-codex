@@ -106,6 +106,9 @@ try {
     Write-Step "Installing Python dependencies from uv.lock"
     Invoke-Checked $UvPath @("sync", "--frozen", "--no-dev")
 
+    Write-Step "Registering cchwc command"
+    Invoke-Checked $UvPath @("tool", "install", "--editable", ".")
+
     Write-Step "Starting setup wizard"
     Invoke-Checked $UvPath @("run", "--no-dev", "cchwc", "setup", "--skip-deps")
 } finally {

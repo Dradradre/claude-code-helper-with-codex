@@ -81,5 +81,8 @@ cd "$INSTALL_DIR"
 log "Installing Python dependencies from uv.lock"
 uv sync --frozen --no-dev
 
+log "Registering cchwc command"
+uv tool install --editable .
+
 log "Starting setup wizard"
 uv run --no-dev cchwc setup --skip-deps
