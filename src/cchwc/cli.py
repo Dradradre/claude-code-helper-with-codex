@@ -190,12 +190,14 @@ def uninstall(
             console.print("[dim]취소했습니다.[/dim]")
             return
 
-    # ── 1. 서버 종료 ──────────────────────────────────────────────
+    # ── 1. 서버 종료 (DB 락 해제까지 대기) ─────────────────────────
+    import time
     if _PID_FILE.exists():
         try:
             pid = int(_PID_FILE.read_text().strip())
             if _terminate_pid(pid):
                 console.print(f"  [green]✓[/green]  서버 종료 (PID {pid})")
+                time.sleep(1.0)  # DB 파일 락 해제 대기
         except (OSError, ValueError):
             pass
         _PID_FILE.unlink(missing_ok=True)
@@ -231,10 +233,23 @@ def uninstall(
 
     # ── 4. DB / 설정 삭제 ────────────────────────────────────────
     if not keep_data:
+        import time
         cchwc_dir = Path.home() / ".cchwc"
         if cchwc_dir.exists():
-            _shutil.rmtree(cchwc_dir)
-            console.print("  [green]✓[/green]  데이터 삭제 (~/.cchwc/)")
+            for attempt in range(10):
+                try:
+                    _shutil.rmtree(cchwc_dir)
+                    console.print("  [green]✓[/green]  데이터 삭제 (~/.cchwc/)")
+                    break
+                except PermissionError:
+                    if attempt == 9:
+                        console.print(
+                            "  [red]✗[/red]  DB 파일이 잠겨 있습니다.\n"
+                            "  [dim]서버가 완전히 종료될 때까지 기다렸다가 다시 실행하세요:[/dim]\n"
+                            "  [cyan]cchwc uninstall --yes[/cyan]"
+                        )
+                    else:
+                        time.sleep(0.5)
     else:
         console.print("  [dim]→  데이터 유지 (--keep-data)[/dim]")
 
