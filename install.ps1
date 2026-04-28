@@ -1,13 +1,13 @@
 # cchwc 설치 스크립트 (Windows PowerShell)
 #
 # 사용법 A — 클론 후:
-#   git clone https://github.com/YOUR/cchwc; cd cchwc; .\install.ps1
+#   git clone https://github.com/Dradradre/claude-code-helper-with-codex; cd cchwc; .\install.ps1
 #
 # 사용법 B — 원클릭 (클론 포함):
-#   irm https://raw.githubusercontent.com/YOUR/cchwc/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/Dradradre/claude-code-helper-with-codex/main/install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
-$REPO_URL = "https://github.com/YOUR/cchwc"  # TODO: 실제 URL로 교체
+$REPO_URL = "https://github.com/Dradradre/claude-code-helper-with-codex"  
 
 # ── 이미 repo 안에서 실행 중인지 확인 ────────────────────────────
 $SelfDir = Split-Path -Parent $MyInvocation.MyCommand.Path

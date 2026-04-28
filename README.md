@@ -94,13 +94,13 @@ Three structured multi-agent modes — all streamed live to the web UI.
 
 ```bash
 # macOS / Linux
-git clone https://github.com/YOUR/cchwc && cd cchwc
+git clone https://github.com/Dradradre/claude-code-helper-with-codex && cd claude-code-helper-with-codex
 bash install.sh
 ```
 
 ```powershell
 # Windows
-git clone https://github.com/YOUR/cchwc; cd cchwc
+git clone https://github.com/Dradradre/claude-code-helper-with-codex; cd claude-code-helper-with-codex
 .\install.ps1
 ```
 
@@ -117,11 +117,11 @@ Then open **http://127.0.0.1:7878** 🎉
 ### Option B — One-liner (fresh machine)
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/YOUR/cchwc/main/install.sh | bash
+curl -LsSf https://raw.githubusercontent.com/Dradradre/claude-code-helper-with-codex/main/install.sh | bash
 ```
 
 ```powershell
-irm https://raw.githubusercontent.com/YOUR/cchwc/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/Dradradre/claude-code-helper-with-codex/main/install.ps1 | iex
 ```
 
 ---
@@ -301,7 +301,7 @@ cchwc/
 ## 🤝 Contributing
 
 ```bash
-git clone https://github.com/YOUR/cchwc && cd cchwc
+git clone https://github.com/Dradradre/claude-code-helper-with-codex && cd claude-code-helper-with-codex
 uv sync
 uv run pytest        # run tests
 uv run ruff check .  # lint
@@ -322,6 +322,6 @@ PRs welcome. For large changes, open an issue first.
 
 Made for developers who use both Claude Code and Codex CLI daily.
 
-[⭐ Star on GitHub](https://github.com/YOUR/cchwc) · [🐛 Report Bug](https://github.com/YOUR/cchwc/issues) · [💡 Request Feature](https://github.com/YOUR/cchwc/issues)
+[⭐ Star on GitHub](https://github.com/Dradradre/claude-code-helper-with-codex) · [🐛 Report Bug](https://github.com/Dradradre/claude-code-helper-with-codex/issues) · [💡 Request Feature](https://github.com/Dradradre/claude-code-helper-with-codex/issues)
 
 </div>

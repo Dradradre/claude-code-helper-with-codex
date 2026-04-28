@@ -94,13 +94,13 @@ GET /api/search?q=sqlalchemy+async
 
 ```bash
 # macOS / Linux
-git clone https://github.com/YOUR/cchwc && cd cchwc
+git clone https://github.com/Dradradre/claude-code-helper-with-codex && cd claude-code-helper-with-codex
 bash install.sh
 ```
 
 ```powershell
 # Windows
-git clone https://github.com/YOUR/cchwc; cd cchwc
+git clone https://github.com/Dradradre/claude-code-helper-with-codex; cd claude-code-helper-with-codex
 .\install.ps1
 ```
 
@@ -119,12 +119,12 @@ git clone https://github.com/YOUR/cchwc; cd cchwc
 
 ```bash
 # macOS / Linux
-curl -LsSf https://raw.githubusercontent.com/YOUR/cchwc/main/install.sh | bash
+curl -LsSf https://raw.githubusercontent.com/Dradradre/claude-code-helper-with-codex/main/install.sh | bash
 ```
 
 ```powershell
 # Windows
-irm https://raw.githubusercontent.com/YOUR/cchwc/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/Dradradre/claude-code-helper-with-codex/main/install.ps1 | iex
 ```
 
 ---
@@ -281,7 +281,7 @@ cchwc install-commands
 ## 🤝 기여하기
 
 ```bash
-git clone https://github.com/YOUR/cchwc && cd cchwc
+git clone https://github.com/Dradradre/claude-code-helper-with-codex && cd claude-code-helper-with-codex
 uv sync
 uv run pytest         # 테스트
 uv run ruff check .   # 린트
@@ -302,6 +302,6 @@ PR은 환영합니다. 대규모 변경은 이슈를 먼저 열어 주세요.
 
 Claude Code와 Codex CLI를 매일 함께 쓰는 개발자를 위해 만들었습니다.
 
-[⭐ GitHub에서 스타 주기](https://github.com/YOUR/cchwc) · [🐛 버그 신고](https://github.com/YOUR/cchwc/issues) · [💡 기능 요청](https://github.com/YOUR/cchwc/issues)
+[⭐ GitHub에서 스타 주기](https://github.com/Dradradre/claude-code-helper-with-codex) · [🐛 버그 신고](https://github.com/Dradradre/claude-code-helper-with-codex/issues) · [💡 기능 요청](https://github.com/Dradradre/claude-code-helper-with-codex/issues)
 
 </div>

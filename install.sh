@@ -2,14 +2,14 @@
 # cchwc 설치 스크립트 (macOS / Linux)
 #
 # 사용법 A — 클론 후:
-#   git clone https://github.com/YOUR/cchwc && cd cchwc && bash install.sh
+#   git clone https://github.com/Dradradre/claude-code-helper-with-codex && cd cchwc && bash install.sh
 #
 # 사용법 B — 원클릭 (클론 포함):
-#   curl -LsSf https://raw.githubusercontent.com/YOUR/cchwc/main/install.sh | bash
+#   curl -LsSf https://raw.githubusercontent.com/Dradradre/claude-code-helper-with-codex/main/install.sh | bash
 
 set -e
 
-REPO_URL="https://github.com/YOUR/cchwc"  # TODO: 실제 URL로 교체
+REPO_URL="https://github.com/Dradradre/claude-code-helper-with-codex"  
 INSTALL_DIR="$HOME/cchwc"
 
 # ── 이미 repo 안에서 실행 중인지 확인 ────────────────────────────
