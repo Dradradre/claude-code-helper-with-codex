@@ -110,6 +110,75 @@ def open_cmd() -> None:
     _do_open()
 
 
+@app.command()
+def uninstall(
+    keep_data: bool = typer.Option(False, "--keep-data", help="DB와 설정 파일은 유지"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="확인 없이 바로 실행"),
+) -> None:
+    """cchwc를 제거합니다 (autostart 해제 + 데이터 삭제)."""
+    import os
+    import shutil as _shutil
+    import signal
+
+    if not yes:
+        console.print("[bold red]이 작업은 되돌릴 수 없습니다.[/bold red]")
+        confirm = typer.confirm("계속하시겠습니까?", default=False)
+        if not confirm:
+            console.print("[dim]취소했습니다.[/dim]")
+            return
+
+    # ── 1. 서버 종료 ──────────────────────────────────────────────
+    if _PID_FILE.exists():
+        try:
+            pid = int(_PID_FILE.read_text().strip())
+            os.kill(pid, signal.SIGTERM)
+            console.print(f"  [green]✓[/green]  서버 종료 (PID {pid})")
+        except (OSError, ValueError):
+            pass
+        _PID_FILE.unlink(missing_ok=True)
+
+    # ── 2. autostart 제거 ─────────────────────────────────────────
+    from cchwc.server_runner import remove_autostart
+    if remove_autostart():
+        console.print("  [green]✓[/green]  자동 시작 해제")
+    else:
+        console.print("  [dim]→  자동 시작 등록 없음 (건너뜀)[/dim]")
+
+    # ── 3. Claude Code 슬래시 커맨드 / MCP 제거 ──────────────────
+    for cmd_name in ["cchwc-compare", "cchwc-review", "cchwc-debate",
+                     "cchwc-start", "cchwc-stop", "cchwc-open"]:
+        for base in [Path.home() / ".claude" / "commands"]:
+            f = base / f"{cmd_name}.md"
+            if f.exists():
+                f.unlink()
+    console.print("  [green]✓[/green]  슬래시 커맨드 제거")
+
+    mcp_json = Path.home() / ".claude" / "mcp.json"
+    if mcp_json.exists():
+        import json
+        try:
+            with open(mcp_json, encoding="utf-8") as f:
+                data = json.load(f)
+            data.get("mcpServers", {}).pop("cchwc", None)
+            with open(mcp_json, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            console.print("  [green]✓[/green]  MCP 서버 등록 해제")
+        except Exception:
+            pass
+
+    # ── 4. DB / 설정 삭제 ────────────────────────────────────────
+    if not keep_data:
+        cchwc_dir = Path.home() / ".cchwc"
+        if cchwc_dir.exists():
+            _shutil.rmtree(cchwc_dir)
+            console.print("  [green]✓[/green]  데이터 삭제 (~/.cchwc/)")
+    else:
+        console.print("  [dim]→  데이터 유지 (--keep-data)[/dim]")
+
+    console.print("\n  [bold]cchwc가 제거되었습니다.[/bold]")
+    console.print("  [dim]소스 코드는 클론한 디렉토리를 직접 삭제하세요.[/dim]")
+
+
 def _do_open() -> None:
     import webbrowser
 
