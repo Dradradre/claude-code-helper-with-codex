@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import platform
 import shutil
 import subprocess
 import sys
@@ -16,6 +17,7 @@ from rich.status import Status
 from rich.table import Table
 from rich.text import Text
 
+IS_WIN = platform.system() == "Windows"
 console = Console()
 INSTALL_DIR = Path(__file__).parent.parent.parent.resolve()
 
@@ -73,7 +75,7 @@ def step_check_prerequisites() -> dict[str, str | None]:
         "node":   _which("node"),
         "npm":    _which("npm"),
         "git":    _which("git"),
-        "uv":     _which("uv") or _which(str(Path.home() / ".local" / "bin" / "uv")),
+        "uv":     _which("uv") or _which(str(Path.home() / ".local" / "bin" / ("uv.exe" if IS_WIN else "uv"))),
     }
 
     for name, path in checks.items():
@@ -108,13 +110,15 @@ def step_install_uv(checks: dict) -> None:
         sys.exit(1)
 
     with Status("  uv 설치 중…", spinner="dots"):
-        result = subprocess.run(
-            ["powershell", "-Command", "irm https://astral.sh/uv/install.ps1 | iex"],
-            capture_output=True, text=True,
-        )
+        if IS_WIN:
+            cmd = ["powershell", "-Command", "irm https://astral.sh/uv/install.ps1 | iex"]
+        else:
+            cmd = ["sh", "-c", "curl -LsSf https://astral.sh/uv/install.sh | sh"]
+        result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode == 0:
-        uv_path = str(Path.home() / ".local" / "bin" / "uv.exe")
+        bin_name = "uv.exe" if IS_WIN else "uv"
+        uv_path = str(Path.home() / ".local" / "bin" / bin_name)
         checks["uv"] = uv_path
         _ok(f"uv 설치 완료: {uv_path}")
     else:
