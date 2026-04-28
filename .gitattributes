@@ -1,0 +1,7 @@
+# 텍스트 파일 줄 끝 통일 (LF)
+* text=auto eol=lf
+*.ps1 text eol=crlf
+
+# 바이너리
+*.db binary
+*.pyc binary
