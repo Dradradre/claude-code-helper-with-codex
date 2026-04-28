@@ -1,6 +1,8 @@
+import traceback
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -11,7 +13,12 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="cchwc", version="0.1.0")
+    app = FastAPI(title="cchwc", version="0.1.0", debug=True)
+
+    @app.exception_handler(Exception)
+    async def debug_exception_handler(request: Request, exc: Exception):
+        tb = traceback.format_exception(type(exc), exc, exc.__traceback__)
+        return PlainTextResponse("".join(tb), status_code=500)
 
     app.include_router(pages.router)
     app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])

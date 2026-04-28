@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -6,8 +6,17 @@ from cchwc.core.models import Message, Project, Session
 from cchwc.core.schemas import ParsedSession
 
 
+def _make_naive(dt: datetime) -> datetime:
+    if dt.tzinfo is not None:
+        return dt.astimezone(UTC).replace(tzinfo=None)
+    return dt
+
+
 async def upsert_parsed_session(db: AsyncSession, parsed: ParsedSession) -> Session:
     from sqlalchemy import select
+
+    started_at = _make_naive(parsed.started_at)
+    last_message_at = _make_naive(parsed.last_message_at)
 
     cwd = parsed.cwd or "unknown"
     project = (await db.execute(select(Project).where(Project.cwd == cwd))).scalar_one_or_none()
@@ -17,14 +26,15 @@ async def upsert_parsed_session(db: AsyncSession, parsed: ParsedSession) -> Sess
             cwd=cwd,
             display_name=display,
             machine_id="",
-            first_seen_at=parsed.started_at,
-            last_active_at=parsed.last_message_at,
+            first_seen_at=started_at,
+            last_active_at=last_message_at,
         )
         db.add(project)
         await db.flush()
     else:
-        if parsed.last_message_at > project.last_active_at:
-            project.last_active_at = parsed.last_message_at
+        existing_last = _make_naive(project.last_active_at) if project.last_active_at else datetime.min
+        if last_message_at > existing_last:
+            project.last_active_at = last_message_at
 
     session = (
         await db.execute(
@@ -40,8 +50,8 @@ async def upsert_parsed_session(db: AsyncSession, parsed: ParsedSession) -> Sess
             file_path=parsed.file_path,
             file_mtime=datetime.now().timestamp(),
             file_size=0,
-            started_at=parsed.started_at,
-            last_message_at=parsed.last_message_at,
+            started_at=started_at,
+            last_message_at=last_message_at,
             message_count=len(parsed.messages),
             total_input_tokens=parsed.total_usage.input_tokens,
             total_output_tokens=parsed.total_usage.output_tokens,
@@ -52,7 +62,7 @@ async def upsert_parsed_session(db: AsyncSession, parsed: ParsedSession) -> Sess
         await db.flush()
     else:
         session.file_mtime = datetime.now().timestamp()
-        session.last_message_at = parsed.last_message_at
+        session.last_message_at = last_message_at
         session.message_count = len(parsed.messages)
         session.total_input_tokens = parsed.total_usage.input_tokens
         session.total_output_tokens = parsed.total_usage.output_tokens
@@ -70,7 +80,7 @@ async def upsert_parsed_session(db: AsyncSession, parsed: ParsedSession) -> Sess
             role=pm.role,
             content_text=pm.content_text,
             content_json=pm.content_json,
-            timestamp=pm.timestamp,
+            timestamp=_make_naive(pm.timestamp),
             input_tokens=pm.input_tokens,
             output_tokens=pm.output_tokens,
             cache_read_tokens=pm.cache_read_tokens,

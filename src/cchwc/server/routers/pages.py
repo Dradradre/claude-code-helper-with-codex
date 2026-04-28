@@ -30,9 +30,9 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         sessions_data.append({"session": s, "project": p})
 
     return templates.TemplateResponse(
-        "dashboard.html",
-        {
-            "request": request,
+        request=request,
+        name="dashboard.html",
+        context={
             "total_sessions": total_sessions,
             "total_projects": total_projects,
             "total_messages": total_messages,
@@ -46,7 +46,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
 @router.get("/sessions")
 async def sessions_page(request: Request, db: AsyncSession = Depends(get_db)):
     templates = request.app.state.templates
-    return templates.TemplateResponse("sessions/list.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="sessions/list.html")
 
 
 @router.get("/sessions/{session_id}")
@@ -54,7 +54,7 @@ async def session_detail_page(request: Request, session_id: int, db: AsyncSessio
     templates = request.app.state.templates
     session = await db.get(Session, session_id)
     if not session:
-        return templates.TemplateResponse("404.html", {"request": request}, status_code=404)
+        return templates.TemplateResponse(request=request, name="404.html", status_code=404)
 
     project = await db.get(Project, session.project_id)
     messages = (
@@ -64,18 +64,19 @@ async def session_detail_page(request: Request, session_id: int, db: AsyncSessio
     )
 
     return templates.TemplateResponse(
-        "sessions/detail.html",
-        {"request": request, "session": session, "project": project, "messages": messages},
+        request=request,
+        name="sessions/detail.html",
+        context={"session": session, "project": project, "messages": messages},
     )
 
 
 @router.get("/tokens")
 async def tokens_page(request: Request):
     templates = request.app.state.templates
-    return templates.TemplateResponse("tokens/dashboard.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="tokens/dashboard.html")
 
 
 @router.get("/orchestrate")
 async def orchestrate_page(request: Request):
     templates = request.app.state.templates
-    return templates.TemplateResponse("orchestrate/index.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="orchestrate/index.html")
