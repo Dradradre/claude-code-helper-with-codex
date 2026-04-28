@@ -11,7 +11,7 @@ def is_available() -> bool:
 async def run_claude_p(
     prompt: str,
     cwd: str = ".",
-    output_format: str = "json",
+    output_format: str = "text",
     allowed_tools: list[str] | None = None,
     max_turns: int | None = None,
     timeout_sec: int = 600,
@@ -25,14 +25,22 @@ async def run_claude_p(
 
     result = await run_agent(cmd, cwd=cwd, timeout_sec=timeout_sec)
 
+    if result.error:
+        return result
+
     if output_format == "json" and result.stdout:
         try:
             parsed = json.loads(result.stdout)
             result.parsed_response = parsed
+            # claude -p json 응답 구조: {"type":"result", "result": "...", "usage": {...}}
+            result.stdout = parsed.get("result") or parsed.get("content") or result.stdout
             usage = parsed.get("usage", {})
             result.input_tokens = usage.get("input_tokens", 0)
             result.output_tokens = usage.get("output_tokens", 0)
         except json.JSONDecodeError:
-            result.parsed_response = None
+            pass
+
+    if result.exit_code != 0 and not result.stdout and result.stderr:
+        result.error = result.stderr[:500]
 
     return result

@@ -11,21 +11,24 @@ def is_available() -> bool:
 async def run_codex_exec(
     prompt: str,
     cwd: str = ".",
-    json_mode: bool = True,
+    json_mode: bool = False,
     timeout_sec: int = 600,
 ) -> AgentResult:
-    cmd = ["codex", "exec"]
-    if json_mode:
-        cmd.append("--json")
-    cmd.append(prompt)
+    cmd = ["codex", "exec", prompt]
 
     result = await run_agent(cmd, cwd=cwd, timeout_sec=timeout_sec)
+
+    if result.error:
+        return result
 
     if json_mode and result.stdout:
         try:
             parsed = json.loads(result.stdout)
             result.parsed_response = parsed
         except json.JSONDecodeError:
-            result.parsed_response = None
+            pass
+
+    if result.exit_code != 0 and not result.stdout and result.stderr:
+        result.error = result.stderr[:500]
 
     return result

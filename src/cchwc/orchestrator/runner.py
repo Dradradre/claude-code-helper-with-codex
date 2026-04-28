@@ -1,6 +1,9 @@
 import asyncio
+import platform
+import shutil
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass
@@ -16,6 +19,16 @@ class AgentResult:
     error: str | None = None
 
 
+def _resolve_cmd(cmd: list[str]) -> list[str]:
+    """Windows에서 .CMD/.BAT 파일은 cmd /c로 감싸야 실행 가능."""
+    if platform.system() != "Windows":
+        return cmd
+    exe = shutil.which(cmd[0])
+    if exe and Path(exe).suffix.lower() in {".cmd", ".bat"}:
+        return ["cmd", "/c", *cmd]
+    return cmd
+
+
 async def run_agent(
     cmd: list[str],
     cwd: str = ".",
@@ -24,9 +37,10 @@ async def run_agent(
     env: dict | None = None,
 ) -> AgentResult:
     start = time.monotonic()
+    resolved = _resolve_cmd(cmd)
     try:
         process = await asyncio.create_subprocess_exec(
-            *cmd,
+            *resolved,
             cwd=cwd,
             stdin=asyncio.subprocess.PIPE if stdin_payload else None,
             stdout=asyncio.subprocess.PIPE,
