@@ -32,7 +32,8 @@ cchwc is a **local-first desktop tool** that sits alongside your Claude Code and
 <tr>
 <td width="50%">
 
-### 📚 Session Hub
+**📚 Session Hub**
+
 Browse, search, and summarize every Claude Code and Codex session across all your projects — in one place.
 
 - Full-text search across all messages
@@ -42,7 +43,8 @@ Browse, search, and summarize every Claude Code and Codex session across all you
 </td>
 <td width="50%">
 
-### 📊 Token Dashboard
+**📊 Token Dashboard**
+
 Know exactly where your budget goes.
 
 - Daily / model / project breakdowns
@@ -54,7 +56,8 @@ Know exactly where your budget goes.
 <tr>
 <td>
 
-### 🔍 Session Search API
+**🔍 Session Search API**
+
 Let Claude Code query its own history.
 
 ```
@@ -66,7 +69,8 @@ Useful in Claude Code slash commands and MCP tools to retrieve past context.
 </td>
 <td>
 
-### 🤖 Agent Orchestration
+**🤖 Agent Orchestration**
+
 Three structured multi-agent modes — all streamed live to the web UI.
 
 | Mode | What it does |

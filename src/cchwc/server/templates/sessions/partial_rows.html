@@ -24,7 +24,7 @@
 {% endfor %}
 {% if has_more %}
 <tr
-  hx-get="/sessions/partial?offset={{ next_offset }}&agent_type={{ agent_type }}&q={{ q }}"
+  hx-get="/sessions/partial?offset={{ next_offset }}&agent_type={{ agent_type }}&project_id={{ project_id }}&q={{ q }}"
   hx-trigger="revealed"
   hx-swap="afterend"
 >

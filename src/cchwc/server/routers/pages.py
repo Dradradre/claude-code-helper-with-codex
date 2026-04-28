@@ -48,13 +48,23 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
 @router.get("/sessions")
 async def sessions_page(request: Request, db: AsyncSession = Depends(get_db)):
     templates = request.app.state.templates
-    return templates.TemplateResponse(request=request, name="sessions/list.html")
+    projects = (
+        (await db.execute(select(Project).order_by(Project.last_active_at.desc())))
+        .scalars()
+        .all()
+    )
+    return templates.TemplateResponse(
+        request=request,
+        name="sessions/list.html",
+        context={"projects": projects},
+    )
 
 
 @router.get("/sessions/partial")
 async def sessions_partial(
     request: Request,
     agent_type: str = "",
+    project_id: str = "",
     q: str = "",
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
@@ -64,7 +74,8 @@ async def sessions_partial(
     query = select(Session).join(Project)
     if agent_type:
         query = query.where(Session.agent_type == agent_type)
-
+    if project_id:
+        query = query.where(Session.project_id == int(project_id))
     if q:
         from sqlalchemy import exists
         query = query.where(
@@ -96,6 +107,7 @@ async def sessions_partial(
             "has_more": next_offset < total,
             "next_offset": next_offset,
             "agent_type": agent_type,
+            "project_id": project_id,
             "q": q,
         },
     )

@@ -7,19 +7,23 @@
     <h1 class="text-2xl font-semibold text-gray-900">Sessions</h1>
     <p class="text-sm text-gray-500 mt-1">인덱싱된 모든 세션</p>
   </div>
-  <!-- 필터 -->
   <div class="flex items-center gap-2">
-    <input
-      type="text"
-      id="search-q"
-      name="q"
-      placeholder="메시지 검색…"
-      class="w-56 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+    <!-- 프로젝트 필터 -->
+    <select
+      id="project-filter"
+      name="project_id"
+      class="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-[220px] truncate"
       hx-get="/sessions/partial"
-      hx-trigger="keyup changed delay:400ms"
+      hx-trigger="change"
       hx-target="#session-table-body"
-      hx-include="#agent-filter,#search-q"
+      hx-include="#project-filter,#agent-filter,#search-q"
     >
+      <option value="">전체 프로젝트</option>
+      {% for p in projects %}
+      <option value="{{ p.id }}" title="{{ p.cwd }}">{{ p.display_name }}</option>
+      {% endfor %}
+    </select>
+    <!-- 에이전트 필터 -->
     <select
       id="agent-filter"
       name="agent_type"
@@ -27,16 +31,27 @@
       hx-get="/sessions/partial"
       hx-trigger="change"
       hx-target="#session-table-body"
-      hx-include="#agent-filter,#search-q"
+      hx-include="#project-filter,#agent-filter,#search-q"
     >
       <option value="">전체</option>
       <option value="claude">Claude</option>
       <option value="codex">Codex</option>
     </select>
+    <!-- 검색 -->
+    <input
+      type="text"
+      id="search-q"
+      name="q"
+      placeholder="메시지 검색…"
+      class="w-52 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+      hx-get="/sessions/partial"
+      hx-trigger="keyup changed delay:400ms"
+      hx-target="#session-table-body"
+      hx-include="#project-filter,#agent-filter,#search-q"
+    >
   </div>
 </div>
 
-<!-- Table -->
 <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
   <table class="w-full">
     <thead>
