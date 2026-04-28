@@ -176,12 +176,16 @@ def step_claude_cli(checks: dict) -> None:
 
     claude = shutil.which("claude")
     if claude:
-        # 이미 로그인 여부 확인 (claude config list 로 체크)
-        probe = subprocess.run(
-            ["claude", "config", "list"],
-            capture_output=True, text=True, shell=IS_WIN,
-        )
-        if probe.returncode == 0:
+        try:
+            probe = subprocess.run(
+                ["claude", "config", "list"],
+                capture_output=True, text=True, shell=IS_WIN, timeout=8,
+            )
+            authenticated = probe.returncode == 0
+        except subprocess.TimeoutExpired:
+            authenticated = False
+
+        if authenticated:
             _ok(t("login_ok"))
         else:
             console.print()
@@ -200,12 +204,16 @@ def step_codex_cli() -> None:
 
     codex = shutil.which("codex")
     if codex:
-        # codex config get api-key 로 로그인 여부 확인
-        probe = subprocess.run(
-            ["codex", "config", "get", "api-key"],
-            capture_output=True, text=True, shell=IS_WIN,
-        )
-        if probe.returncode == 0 and probe.stdout.strip():
+        try:
+            probe = subprocess.run(
+                ["codex", "config", "get", "api-key"],
+                capture_output=True, text=True, shell=IS_WIN, timeout=8,
+            )
+            authenticated = probe.returncode == 0 and bool(probe.stdout.strip())
+        except subprocess.TimeoutExpired:
+            authenticated = False
+
+        if authenticated:
             _ok(t("codex_login_ok"))
         else:
             console.print()
