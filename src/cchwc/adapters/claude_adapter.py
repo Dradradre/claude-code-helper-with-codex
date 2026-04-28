@@ -71,7 +71,20 @@ class ClaudeAdapter(SessionAdapter):
             if rec_type in ("user", "assistant"):
                 msg = record.get("message", {})
                 role = msg.get("role", rec_type)
-                content_text = self._extract_text(msg.get("content"))
+                content = msg.get("content")
+                # tool_result 블록만 있는 user 메시지는 별도 role로 분리
+                if (
+                    role == "user"
+                    and isinstance(content, list)
+                    and content
+                    and all(
+                        isinstance(b, dict) and b.get("type") == "tool_result"
+                        for b in content
+                        if isinstance(b, dict)
+                    )
+                ):
+                    role = "tool_result"
+                content_text = self._extract_text(content)
                 ts = record.get("timestamp", "")
                 model = msg.get("model")
 

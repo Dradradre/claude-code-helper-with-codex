@@ -122,9 +122,16 @@ def remove_autostart() -> bool:
     system = platform.system()
     try:
         if system == "Darwin":
+            import os
             plist = Path.home() / "Library" / "LaunchAgents" / "com.cchwc.agent.plist"
             if plist.exists():
-                subprocess.run(["launchctl", "unload", str(plist)], check=False)
+                uid = os.getuid()
+                r = subprocess.run(
+                    ["launchctl", "bootout", f"gui/{uid}", str(plist)],
+                    check=False, capture_output=True,
+                )
+                if r.returncode != 0:
+                    subprocess.run(["launchctl", "unload", str(plist)], check=False, capture_output=True)
                 plist.unlink()
             return True
         if system == "Windows":
@@ -141,7 +148,13 @@ def remove_autostart() -> bool:
         return False
 
 
+def _xml_esc(s: str) -> str:
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+
 def _autostart_macos(uv: str, base: Path) -> bool:
+    import os
+
     label = "com.cchwc.agent"
     log_dir = Path.home() / ".cchwc"
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -151,6 +164,10 @@ def _autostart_macos(uv: str, base: Path) -> bool:
     uv_cache = base / ".uv-cache"
     uv_cache.mkdir(parents=True, exist_ok=True)
 
+    # LaunchAgent는 셸 PATH를 상속하지 않으므로 명시적으로 설정
+    uv_dir = str(Path(uv).parent)
+    path_val = f"/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:{_xml_esc(uv_dir)}"
+
     plist.write_text(f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -158,28 +175,44 @@ def _autostart_macos(uv: str, base: Path) -> bool:
   <key>Label</key><string>{label}</string>
   <key>ProgramArguments</key>
   <array>
-    <string>{uv}</string>
+    <string>{_xml_esc(uv)}</string>
     <string>run</string>
     <string>--no-dev</string>
     <string>--project</string>
-    <string>{base}</string>
+    <string>{_xml_esc(str(base))}</string>
     <string>cchwc</string>
     <string>serve</string>
   </array>
-  <key>WorkingDirectory</key><string>{base}</string>
+  <key>WorkingDirectory</key><string>{_xml_esc(str(base))}</string>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>UV_CACHE_DIR</key><string>{uv_cache}</string>
+    <key>PATH</key><string>{path_val}</string>
+    <key>UV_CACHE_DIR</key><string>{_xml_esc(str(uv_cache))}</string>
   </dict>
   <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>{log_dir}/cchwc.log</string>
-  <key>StandardErrorPath</key><string>{log_dir}/cchwc.err</string>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key><false/>
+  </dict>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>StandardOutPath</key><string>{_xml_esc(str(log_dir))}/cchwc.log</string>
+  <key>StandardErrorPath</key><string>{_xml_esc(str(log_dir))}/cchwc.err</string>
 </dict></plist>
 """, encoding="utf-8")
 
-    subprocess.run(["launchctl", "unload", str(plist)], check=False, capture_output=True)
-    result = subprocess.run(["launchctl", "load", str(plist)], capture_output=True)
+    uid = os.getuid()
+    # macOS 13+ (Ventura): bootstrap/bootout 사용, 구버전은 load/unload로 fallback
+    subprocess.run(
+        ["launchctl", "bootout", f"gui/{uid}", str(plist)],
+        check=False, capture_output=True,
+    )
+    result = subprocess.run(
+        ["launchctl", "bootstrap", f"gui/{uid}", str(plist)],
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        subprocess.run(["launchctl", "unload", str(plist)], check=False, capture_output=True)
+        result = subprocess.run(["launchctl", "load", str(plist)], capture_output=True)
     return result.returncode == 0
 
 
