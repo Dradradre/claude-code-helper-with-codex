@@ -1,64 +1,74 @@
 {% extends "base.html" %}
 {% block title %}Dashboard — cchwc{% endblock %}
 {% block content %}
-<h1 class="text-3xl font-bold mb-8">Dashboard</h1>
 
-<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-    <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
-        <div class="text-gray-400 text-sm">Sessions</div>
-        <div class="text-2xl font-bold">{{ total_sessions }}</div>
-    </div>
-    <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
-        <div class="text-gray-400 text-sm">Projects</div>
-        <div class="text-2xl font-bold">{{ total_projects }}</div>
-    </div>
-    <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
-        <div class="text-gray-400 text-sm">Messages</div>
-        <div class="text-2xl font-bold">{{ "{:,}".format(total_messages) }}</div>
-    </div>
-    <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
-        <div class="text-gray-400 text-sm">Input Tokens</div>
-        <div class="text-2xl font-bold">{{ "{:,}".format(total_input_tokens) }}</div>
-    </div>
-    <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
-        <div class="text-gray-400 text-sm">Output Tokens</div>
-        <div class="text-2xl font-bold">{{ "{:,}".format(total_output_tokens) }}</div>
-    </div>
+<div class="mb-8">
+  <h1 class="text-2xl font-semibold text-gray-900">Dashboard</h1>
+  <p class="text-sm text-gray-500 mt-1">Claude Code + Codex 세션 현황</p>
 </div>
 
-<h2 class="text-xl font-semibold mb-4">Recent Sessions</h2>
-<div class="bg-gray-900 rounded-lg border border-gray-800 overflow-hidden">
-    <table class="w-full text-sm">
-        <thead class="bg-gray-800">
-            <tr>
-                <th class="px-4 py-2 text-left">Agent</th>
-                <th class="px-4 py-2 text-left">Project</th>
-                <th class="px-4 py-2 text-left">Last Active</th>
-                <th class="px-4 py-2 text-right">Messages</th>
-                <th class="px-4 py-2 text-right">Tokens</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in recent_sessions %}
-            <tr class="border-t border-gray-800 hover:bg-gray-800/50">
-                <td class="px-4 py-2">
-                    <span class="px-2 py-0.5 rounded text-xs font-medium {% if item.session.agent_type == 'claude' %}bg-blue-900 text-blue-300{% else %}bg-green-900 text-green-300{% endif %}">
-                        {{ item.session.agent_type }}
-                    </span>
-                </td>
-                <td class="px-4 py-2">
-                    <a href="/sessions/{{ item.session.id }}" class="text-blue-400 hover:underline">
-                        {{ item.project.display_name if item.project else 'unknown' }}
-                    </a>
-                </td>
-                <td class="px-4 py-2 text-gray-400">{{ item.session.last_message_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                <td class="px-4 py-2 text-right">{{ item.session.message_count }}</td>
-                <td class="px-4 py-2 text-right text-gray-400">
-                    {{ "{:,}".format(item.session.total_input_tokens + item.session.total_output_tokens) }}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<!-- Stats -->
+<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8">
+  {% set stats = [
+    ("Sessions", total_sessions, None),
+    ("Projects", total_projects, None),
+    ("Messages", "{:,}".format(total_messages), None),
+    ("Input Tokens", "{:,}".format(total_input_tokens), None),
+    ("Output Tokens", "{:,}".format(total_output_tokens), None),
+  ] %}
+  {% for label, value, _ in stats %}
+  <div class="bg-white rounded-xl border border-gray-200 p-4">
+    <p class="text-xs font-medium text-gray-500 mb-1">{{ label }}</p>
+    <p class="text-xl font-semibold text-gray-900">{{ value }}</p>
+  </div>
+  {% endfor %}
 </div>
+
+<!-- Recent Sessions -->
+<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+  <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+    <h2 class="text-sm font-semibold text-gray-900">최근 세션</h2>
+    <a href="/sessions" class="text-xs text-blue-600 hover:underline">전체 보기</a>
+  </div>
+  <table class="w-full">
+    <thead>
+      <tr class="bg-gray-50 border-b border-gray-100">
+        <th class="px-5 py-2.5 text-left text-xs font-medium text-gray-500">에이전트</th>
+        <th class="px-5 py-2.5 text-left text-xs font-medium text-gray-500">프로젝트</th>
+        <th class="px-5 py-2.5 text-left text-xs font-medium text-gray-500">마지막 활동</th>
+        <th class="px-5 py-2.5 text-right text-xs font-medium text-gray-500">메시지</th>
+        <th class="px-5 py-2.5 text-right text-xs font-medium text-gray-500">토큰 합계</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for item in recent_sessions %}
+      <tr class="hover:bg-gray-50 transition-colors">
+        <td class="px-5 py-3">
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium badge-{{ item.session.agent_type }}">
+            {{ item.session.agent_type }}
+          </span>
+        </td>
+        <td class="px-5 py-3">
+          <a href="/sessions/{{ item.session.id }}" class="text-sm text-blue-600 hover:underline font-medium">
+            {{ item.project.display_name if item.project else '(unknown)' }}
+          </a>
+          <p class="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{{ item.session.external_id[:16] }}…</p>
+        </td>
+        <td class="px-5 py-3 text-sm text-gray-500">{{ item.session.last_message_at.strftime('%m/%d %H:%M') }}</td>
+        <td class="px-5 py-3 text-sm text-right text-gray-700">{{ item.session.message_count }}</td>
+        <td class="px-5 py-3 text-sm text-right text-gray-500">
+          {{ "{:,}".format(item.session.total_input_tokens + item.session.total_output_tokens) }}
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" class="px-5 py-12 text-center text-sm text-gray-400">
+          세션이 없습니다. <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs">cchwc scan</code>을 실행해 주세요.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
 {% endblock %}

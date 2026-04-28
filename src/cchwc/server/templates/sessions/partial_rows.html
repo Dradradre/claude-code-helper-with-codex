@@ -1,0 +1,33 @@
+{% for item in items %}
+<tr class="hover:bg-gray-50 transition-colors">
+  <td class="px-5 py-3">
+    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium badge-{{ item.session.agent_type }}">
+      {{ item.session.agent_type }}
+    </span>
+  </td>
+  <td class="px-5 py-3">
+    <a href="/sessions/{{ item.session.id }}" class="text-sm font-medium text-blue-600 hover:underline">
+      {{ item.project.display_name if item.project else '(unknown)' }}
+    </a>
+    <p class="text-xs text-gray-400 mt-0.5 font-mono">{{ item.session.external_id[:20] }}…</p>
+  </td>
+  <td class="px-5 py-3 text-sm text-gray-500">{{ item.session.started_at.strftime('%m/%d %H:%M') }}</td>
+  <td class="px-5 py-3 text-sm text-gray-500">{{ item.session.last_message_at.strftime('%m/%d %H:%M') }}</td>
+  <td class="px-5 py-3 text-sm text-right text-gray-700 font-medium">{{ item.session.message_count }}</td>
+  <td class="px-5 py-3 text-sm text-right text-gray-500">{{ "{:,}".format(item.session.total_input_tokens) }}</td>
+  <td class="px-5 py-3 text-sm text-right text-gray-500">{{ "{:,}".format(item.session.total_output_tokens) }}</td>
+</tr>
+{% else %}
+<tr>
+  <td colspan="7" class="px-5 py-12 text-center text-sm text-gray-400">세션이 없습니다.</td>
+</tr>
+{% endfor %}
+{% if has_more %}
+<tr
+  hx-get="/sessions/partial?offset={{ next_offset }}&agent_type={{ agent_type }}&q={{ q }}"
+  hx-trigger="revealed"
+  hx-swap="afterend"
+>
+  <td colspan="7" class="px-5 py-4 text-center text-sm text-gray-400">더 불러오는 중…</td>
+</tr>
+{% endif %}

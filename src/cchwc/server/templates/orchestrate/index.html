@@ -1,91 +1,132 @@
 {% extends "base.html" %}
 {% block title %}Orchestrate — cchwc{% endblock %}
 {% block content %}
-<h1 class="text-3xl font-bold mb-8">Agent Orchestration</h1>
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-    <div class="bg-gray-900 rounded-lg p-5 border border-gray-800">
-        <h3 class="text-lg font-semibold mb-2 text-blue-400">Compare</h3>
-        <p class="text-sm text-gray-400 mb-4">같은 프롬프트를 Claude와 Codex에 동시에 보내고 결과를 나란히 비교합니다.</p>
-        <button onclick="showForm('compare')" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-sm font-medium">Start Compare</button>
-    </div>
-    <div class="bg-gray-900 rounded-lg p-5 border border-gray-800">
-        <h3 class="text-lg font-semibold mb-2 text-green-400">Review</h3>
-        <p class="text-sm text-gray-400 mb-4">한쪽이 구현하면 다른 쪽이 리뷰하고, 피드백에 따라 수정합니다.</p>
-        <button onclick="showForm('review')" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-sm font-medium">Start Review</button>
-    </div>
-    <div class="bg-gray-900 rounded-lg p-5 border border-gray-800">
-        <h3 class="text-lg font-semibold mb-2 text-purple-400">Debate</h3>
-        <p class="text-sm text-gray-400 mb-4">양쪽이 토론하고 judge가 수렴을 판정합니다.</p>
-        <button onclick="showForm('debate')" class="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded text-sm font-medium">Start Debate</button>
-    </div>
+<div class="mb-8">
+  <h1 class="text-2xl font-semibold text-gray-900">Orchestrate</h1>
+  <p class="text-sm text-gray-500 mt-1">Claude와 Codex를 협업시키는 실험적 기능</p>
 </div>
 
-<div id="run-form" class="hidden bg-gray-900 rounded-lg p-6 border border-gray-800 mb-8">
-    <h3 id="form-title" class="text-lg font-semibold mb-4"></h3>
-    <input type="hidden" id="mode-input">
-    <div class="mb-4">
-        <label class="block text-sm text-gray-400 mb-1">Prompt</label>
-        <textarea id="prompt-input" rows="4" class="w-full bg-gray-800 border border-gray-700 rounded p-3 text-sm"></textarea>
+<!-- Mode cards -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+  {% for mode, color, title, desc in [
+    ('compare', 'blue',   'Compare',  '같은 프롬프트를 양쪽에 동시에 전달하고 결과를 나란히 비교합니다.'),
+    ('review',  'violet', 'Review',   '한쪽이 구현하면 다른 쪽이 코드 리뷰하고, 피드백에 따라 수정합니다.'),
+    ('debate',  'emerald','Debate',   '특정 주제로 토론하고 judge가 수렴 여부를 판정합니다.'),
+  ] %}
+  <div class="bg-white rounded-xl border border-gray-200 p-5 flex flex-col gap-3">
+    <div class="flex items-center gap-2">
+      <span class="inline-block w-2 h-2 rounded-full bg-{{ color }}-500"></span>
+      <h3 class="text-sm font-semibold text-gray-900">{{ title }}</h3>
     </div>
-    <div class="mb-4">
-        <label class="block text-sm text-gray-400 mb-1">Working Directory</label>
-        <input type="text" id="cwd-input" value="." class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm">
-    </div>
-    <button onclick="startRun()" class="bg-white text-black px-6 py-2 rounded text-sm font-medium hover:bg-gray-200">Run</button>
+    <p class="text-sm text-gray-500 flex-1">{{ desc }}</p>
+    <button
+      onclick="showForm('{{ mode }}')"
+      class="mt-1 w-full text-sm font-medium py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors text-gray-700"
+    >
+      시작하기
+    </button>
+  </div>
+  {% endfor %}
 </div>
 
-<div id="run-output" class="hidden bg-gray-900 rounded-lg p-6 border border-gray-800 mb-8">
-    <div class="flex justify-between items-center mb-4">
-        <h3 class="text-lg font-semibold">Output</h3>
-        <span id="run-status" class="text-sm px-2 py-0.5 rounded bg-yellow-900 text-yellow-300">running</span>
+<!-- Form -->
+<div id="run-form" class="hidden bg-white rounded-xl border border-gray-200 p-6 mb-6">
+  <h3 id="form-title" class="text-sm font-semibold text-gray-900 mb-4"></h3>
+  <input type="hidden" id="mode-input">
+  <div class="space-y-4">
+    <div>
+      <label class="block text-xs font-medium text-gray-700 mb-1.5">프롬프트</label>
+      <textarea id="prompt-input" rows="4"
+        class="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
     </div>
-    <div id="run-steps" class="space-y-3"></div>
+    <div>
+      <label class="block text-xs font-medium text-gray-700 mb-1.5">작업 디렉토리</label>
+      <input type="text" id="cwd-input" value="."
+        class="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+    </div>
+    <div class="flex gap-2">
+      <button onclick="startRun()"
+        class="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors">
+        실행
+      </button>
+      <button onclick="document.getElementById('run-form').classList.add('hidden')"
+        class="px-4 py-2 text-sm text-gray-600 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+        취소
+      </button>
+    </div>
+  </div>
 </div>
 
-<h2 class="text-xl font-semibold mb-4">Recent Runs</h2>
-<div id="runs-list" hx-get="/api/orchestrate/runs" hx-trigger="load" hx-target="this">
-    <div class="text-gray-500">Loading...</div>
+<!-- Output -->
+<div id="run-output" class="hidden bg-white rounded-xl border border-gray-200 p-6 mb-6">
+  <div class="flex items-center justify-between mb-4">
+    <h3 class="text-sm font-semibold text-gray-900">실행 결과</h3>
+    <span id="run-status" class="text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-medium">실행 중</span>
+  </div>
+  <div id="run-steps" class="space-y-3"></div>
+</div>
+
+<!-- Recent runs -->
+<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+  <div class="px-5 py-4 border-b border-gray-100">
+    <h3 class="text-sm font-semibold text-gray-700">최근 실행</h3>
+  </div>
+  <div id="runs-list"
+    hx-get="/api/orchestrate/runs"
+    hx-trigger="load"
+    hx-target="this"
+    class="p-4 text-sm text-gray-400">불러오는 중…</div>
 </div>
 
 <script>
 function showForm(mode) {
-    document.getElementById('run-form').classList.remove('hidden');
-    document.getElementById('mode-input').value = mode;
-    document.getElementById('form-title').textContent = mode.charAt(0).toUpperCase() + mode.slice(1) + ' Mode';
-    document.getElementById('prompt-input').focus();
+  const titles = { compare: 'Compare', review: 'Review', debate: 'Debate' };
+  document.getElementById('mode-input').value = mode;
+  document.getElementById('form-title').textContent = titles[mode] + ' 모드';
+  document.getElementById('run-form').classList.remove('hidden');
+  document.getElementById('prompt-input').focus();
 }
 
 async function startRun() {
-    const mode = document.getElementById('mode-input').value;
-    const prompt = document.getElementById('prompt-input').value;
-    const cwd = document.getElementById('cwd-input').value;
+  const mode = document.getElementById('mode-input').value;
+  const prompt = document.getElementById('prompt-input').value.trim();
+  if (!prompt) return;
+  const cwd = document.getElementById('cwd-input').value || '.';
 
-    const res = await fetch('/api/orchestrate/runs', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({mode, prompt, cwd})
-    });
-    const data = await res.json();
+  document.getElementById('run-form').classList.add('hidden');
+  document.getElementById('run-output').classList.remove('hidden');
+  document.getElementById('run-steps').innerHTML = '';
+  document.getElementById('run-status').textContent = '실행 중';
 
-    document.getElementById('run-form').classList.add('hidden');
-    document.getElementById('run-output').classList.remove('hidden');
-    document.getElementById('run-steps').innerHTML = '';
+  const res = await fetch('/api/orchestrate/runs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode, prompt, cwd })
+  });
+  const data = await res.json();
 
-    const evtSource = new EventSource(`/api/orchestrate/runs/${data.id}/stream`);
-    evtSource.onmessage = function(e) {
-        const event = JSON.parse(e.data);
-        if (event.type === 'done') {
-            document.getElementById('run-status').textContent = 'completed';
-            document.getElementById('run-status').className = 'text-sm px-2 py-0.5 rounded bg-green-900 text-green-300';
-            evtSource.close();
-            return;
-        }
-        const div = document.createElement('div');
-        div.className = 'bg-gray-800 rounded p-3 text-sm';
-        div.innerHTML = `<span class="text-gray-400">${event.agent || ''} ${event.role || ''}</span><pre class="mt-1 whitespace-pre-wrap">${event.text || JSON.stringify(event)}</pre>`;
-        document.getElementById('run-steps').appendChild(div);
-    };
+  const es = new EventSource(`/api/orchestrate/runs/${data.id}/stream`);
+  es.onmessage = e => {
+    const ev = JSON.parse(e.data);
+    if (ev.type === 'done') {
+      document.getElementById('run-status').textContent = '완료';
+      document.getElementById('run-status').className = 'text-xs px-2.5 py-1 rounded-full bg-green-50 text-green-700 border border-green-200 font-medium';
+      es.close();
+      return;
+    }
+    const agentColors = { claude: 'text-violet-600', codex: 'text-emerald-600', judge: 'text-blue-600' };
+    const color = agentColors[ev.agent] || 'text-gray-600';
+    const div = document.createElement('div');
+    if (ev.type === 'status') {
+      div.className = 'flex items-center gap-2 text-xs text-gray-400';
+      div.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0"></span>${ev.text}`;
+    } else {
+      div.className = 'border border-gray-100 rounded-lg p-4';
+      div.innerHTML = `<p class="text-xs font-medium ${color} mb-2">${ev.agent || ''} <span class="text-gray-400 font-normal">${ev.role || ''}</span></p><pre class="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">${ev.text || ''}</pre>`;
+    }
+    document.getElementById('run-steps').appendChild(div);
+  };
 }
 </script>
 {% endblock %}

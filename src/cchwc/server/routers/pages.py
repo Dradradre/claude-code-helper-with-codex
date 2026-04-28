@@ -7,6 +7,8 @@ from cchwc.server.deps import get_db
 
 router = APIRouter()
 
+PAGE_SIZE = 50
+
 
 @router.get("/")
 async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
@@ -47,6 +49,56 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
 async def sessions_page(request: Request, db: AsyncSession = Depends(get_db)):
     templates = request.app.state.templates
     return templates.TemplateResponse(request=request, name="sessions/list.html")
+
+
+@router.get("/sessions/partial")
+async def sessions_partial(
+    request: Request,
+    agent_type: str = "",
+    q: str = "",
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db),
+):
+    templates = request.app.state.templates
+
+    query = select(Session).join(Project)
+    if agent_type:
+        query = query.where(Session.agent_type == agent_type)
+
+    if q:
+        from sqlalchemy import exists
+        query = query.where(
+            exists(
+                select(Message.id).where(
+                    Message.session_id == Session.id,
+                    Message.content_text.contains(q),
+                )
+            )
+        )
+
+    total_query = select(func.count()).select_from(query.subquery())
+    total = (await db.execute(total_query)).scalar() or 0
+
+    query = query.order_by(Session.last_message_at.desc()).offset(offset).limit(PAGE_SIZE)
+    sessions = (await db.execute(query)).scalars().all()
+
+    items = []
+    for s in sessions:
+        p = await db.get(Project, s.project_id)
+        items.append({"session": s, "project": p})
+
+    next_offset = offset + PAGE_SIZE
+    return templates.TemplateResponse(
+        request=request,
+        name="sessions/partial_rows.html",
+        context={
+            "items": items,
+            "has_more": next_offset < total,
+            "next_offset": next_offset,
+            "agent_type": agent_type,
+            "q": q,
+        },
+    )
 
 
 @router.get("/sessions/{session_id}")
