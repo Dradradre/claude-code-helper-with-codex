@@ -1,0 +1,210 @@
+"""daemon + web server를 단일 asyncio 루프에서 실행."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import platform
+import shutil
+import subprocess
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+INSTALL_DIR = Path(__file__).parent.parent.parent.resolve()
+
+
+async def serve_all(open_browser: bool = False) -> None:
+    """DB 초기화 → 자동 스캔(필요 시) → watcher → 웹 서버를 단일 프로세스로 실행."""
+    import uvicorn
+    from sqlalchemy import func, select
+
+    from cchwc.config import Settings
+    from cchwc.core.db import get_engine, get_session_factory
+    from cchwc.core.models import Base, Session
+    from cchwc.indexer.scanner import initial_scan
+    from cchwc.indexer.watcher import SessionWatcher
+    from cchwc.server.app import create_app
+
+    settings = Settings()
+
+    # ── 1. DB init ──────────────────────────────────────────────
+    engine = get_engine(settings)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    session_factory = get_session_factory(settings)
+
+    # ── 2. Auto scan if DB is empty ────────────────────────────
+    async with session_factory() as db:
+        count = (await db.execute(select(func.count(Session.id)))).scalar() or 0
+
+    if count == 0:
+        logger.info("Empty DB — running initial scan…")
+        adapters = _make_adapters(settings)
+        async with session_factory() as db:
+            for adapter in adapters:
+                report = await initial_scan(adapter, db, settings.scan_concurrency)
+                logger.info("%s: %d sessions", adapter.agent_type, report.parsed)
+
+    # ── 3. Start watcher as background asyncio task ────────────
+    adapters = _make_adapters(settings)
+    watcher = SessionWatcher(adapters, settings.watch_debounce_ms)
+    watcher.start()
+    watcher_task = asyncio.create_task(watcher.consume_loop(session_factory))
+
+    # ── 4. Open browser (optional) ─────────────────────────────
+    if open_browser:
+        _open_browser(f"http://{settings.host}:{settings.port}")
+
+    # ── 5. Start web server ─────────────────────────────────────
+    app = create_app()
+    config = uvicorn.Config(
+        app,
+        host=settings.host,
+        port=settings.port,
+        log_level="warning",
+    )
+    server = uvicorn.Server(config)
+
+    print(f"\n  cchwc  →  http://{settings.host}:{settings.port}\n")
+
+    try:
+        await server.serve()
+    finally:
+        watcher_task.cancel()
+        watcher.stop()
+
+
+def _make_adapters(settings):
+    from cchwc.adapters.claude_adapter import ClaudeAdapter
+    from cchwc.adapters.codex_adapter import CodexAdapter
+
+    scan_roots = settings.scan_roots if settings.scan_mode == "project" and settings.scan_roots else None
+    return [
+        ClaudeAdapter(settings.claude_root, scan_roots=scan_roots),
+        CodexAdapter(settings.codex_root),
+    ]
+
+
+def _open_browser(url: str) -> None:
+    import contextlib
+    import webbrowser
+    with contextlib.suppress(Exception):
+        webbrowser.open(url)
+
+
+# ── Auto-start registration ────────────────────────────────────────────────
+
+def install_autostart(uv_path: str | None = None, install_dir: Path | None = None) -> bool:
+    """OS별 자동 시작을 등록합니다. 성공하면 True."""
+    uv = uv_path or shutil.which("uv") or "uv"
+    base = install_dir or INSTALL_DIR
+
+    system = platform.system()
+    try:
+        if system == "Darwin":
+            return _autostart_macos(uv, base)
+        if system == "Windows":
+            return _autostart_windows(uv, base)
+        return _autostart_linux(uv, base)
+    except Exception as e:
+        logger.warning("autostart failed: %s", e)
+        return False
+
+
+def remove_autostart() -> bool:
+    """자동 시작 등록을 제거합니다."""
+    system = platform.system()
+    try:
+        if system == "Darwin":
+            plist = Path.home() / "Library" / "LaunchAgents" / "com.cchwc.agent.plist"
+            if plist.exists():
+                subprocess.run(["launchctl", "unload", str(plist)], check=False)
+                plist.unlink()
+            return True
+        if system == "Windows":
+            bat = _win_startup_dir() / "cchwc.bat"
+            if bat.exists():
+                bat.unlink()
+            return True
+        service = Path.home() / ".config" / "systemd" / "user" / "cchwc.service"
+        if service.exists():
+            subprocess.run(["systemctl", "--user", "disable", "--now", "cchwc"], check=False)
+            service.unlink()
+        return True
+    except Exception:
+        return False
+
+
+def _autostart_macos(uv: str, base: Path) -> bool:
+    label = "com.cchwc.agent"
+    log_dir = Path.home() / ".cchwc"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    plist_dir = Path.home() / "Library" / "LaunchAgents"
+    plist_dir.mkdir(parents=True, exist_ok=True)
+    plist = plist_dir / f"{label}.plist"
+
+    plist.write_text(f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>{label}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>{uv}</string>
+    <string>run</string>
+    <string>--project</string>
+    <string>{base}</string>
+    <string>cchwc</string>
+    <string>serve</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>{log_dir}/cchwc.log</string>
+  <key>StandardErrorPath</key><string>{log_dir}/cchwc.err</string>
+</dict></plist>
+""", encoding="utf-8")
+
+    subprocess.run(["launchctl", "unload", str(plist)], check=False, capture_output=True)
+    result = subprocess.run(["launchctl", "load", str(plist)], capture_output=True)
+    return result.returncode == 0
+
+
+def _win_startup_dir() -> Path:
+    import os
+    appdata = Path(os.environ.get("APPDATA", str(Path.home())))
+    return appdata / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+
+
+def _autostart_windows(uv: str, base: Path) -> bool:
+    startup = _win_startup_dir()
+    startup.mkdir(parents=True, exist_ok=True)
+    bat = startup / "cchwc.bat"
+    bat.write_text(
+        f'@echo off\nstart /min "" "{uv}" run --project "{base}" cchwc serve\n',
+        encoding="utf-8",
+    )
+    return True
+
+
+def _autostart_linux(uv: str, base: Path) -> bool:
+    svc_dir = Path.home() / ".config" / "systemd" / "user"
+    svc_dir.mkdir(parents=True, exist_ok=True)
+    svc = svc_dir / "cchwc.service"
+    svc.write_text(f"""[Unit]
+Description=cchwc — Claude Code + Codex Session Hub
+After=network.target
+
+[Service]
+ExecStart={uv} run --project {base} cchwc serve
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+""", encoding="utf-8")
+
+    subprocess.run(["systemctl", "--user", "daemon-reload"], check=False, capture_output=True)
+    result = subprocess.run(["systemctl", "--user", "enable", "--now", "cchwc"], capture_output=True)
+    return result.returncode == 0

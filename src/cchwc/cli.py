@@ -12,16 +12,112 @@ console = Console()
 # serve
 # ──────────────────────────────────────────
 
+_PID_FILE = Path.home() / ".cchwc" / "cchwc.pid"
+
+
 @app.command()
 def serve(
     host: str = typer.Option("127.0.0.1", help="서버 호스트"),
     port: int = typer.Option(7878, help="서버 포트"),
+    open_browser: bool = typer.Option(False, "--open", help="시작 후 브라우저 자동 열기"),
 ) -> None:
-    """웹 서버를 시작합니다."""
-    import uvicorn
+    """웹 서버 + watchdog을 포그라운드로 실행합니다. (Ctrl+C로 종료)"""
+    from cchwc.server_runner import serve_all
+    asyncio.run(serve_all(open_browser=open_browser))
 
-    from cchwc.server.app import create_app
-    uvicorn.run(create_app(), host=host, port=port)
+
+@app.command()
+def start(
+    open_browser: bool = typer.Option(False, "--open", help="시작 후 브라우저 열기"),
+) -> None:
+    """백그라운드에서 서버를 시작합니다."""
+    import os
+    import subprocess
+    import sys
+
+    if _PID_FILE.exists():
+        pid = int(_PID_FILE.read_text().strip())
+        try:
+            os.kill(pid, 0)
+            console.print(f"  [yellow]이미 실행 중[/yellow] (PID {pid})  →  http://127.0.0.1:7878")
+            if open_browser:
+                _do_open()
+            return
+        except OSError:
+            _PID_FILE.unlink(missing_ok=True)
+
+    exe = sys.executable
+    log_dir = Path.home() / ".cchwc"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / "cchwc.log"
+
+    log_file = open(log_path, "a")  # noqa: SIM115
+    proc = subprocess.Popen(
+        [exe, "-m", "cchwc._bg_serve"],
+        stdout=log_file,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+    _PID_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _PID_FILE.write_text(str(proc.pid))
+    console.print(f"  [green]✓[/green]  cchwc started (PID {proc.pid})  →  http://127.0.0.1:7878")
+    console.print(f"  [dim]log: {log_path}[/dim]")
+    if open_browser:
+        import time
+        time.sleep(1.5)
+        _do_open()
+
+
+@app.command()
+def stop() -> None:
+    """실행 중인 백그라운드 서버를 종료합니다."""
+    import os
+    import signal
+
+    if not _PID_FILE.exists():
+        console.print("  [dim]실행 중인 서버가 없습니다.[/dim]")
+        return
+    pid = int(_PID_FILE.read_text().strip())
+    try:
+        os.kill(pid, signal.SIGTERM)
+        _PID_FILE.unlink(missing_ok=True)
+        console.print(f"  [green]✓[/green]  cchwc stopped (PID {pid})")
+    except ProcessLookupError:
+        _PID_FILE.unlink(missing_ok=True)
+        console.print("  [dim]프로세스가 이미 종료되어 있었습니다.[/dim]")
+
+
+@app.command()
+def status() -> None:
+    """서버 실행 상태를 확인합니다."""
+    import os
+
+    if not _PID_FILE.exists():
+        console.print("  [dim]●[/dim]  cchwc  [dim]stopped[/dim]")
+        return
+    pid = int(_PID_FILE.read_text().strip())
+    try:
+        os.kill(pid, 0)
+        console.print(f"  [green]●[/green]  cchwc  [green]running[/green]  (PID {pid})  →  http://127.0.0.1:7878")
+    except OSError:
+        _PID_FILE.unlink(missing_ok=True)
+        console.print("  [red]●[/red]  cchwc  [dim]crashed (PID file stale)[/dim]")
+
+
+@app.command("open")
+def open_cmd() -> None:
+    """브라우저에서 대시보드를 엽니다."""
+    _do_open()
+
+
+def _do_open() -> None:
+    import webbrowser
+
+    from cchwc.config import Settings
+    s = Settings()
+    url = f"http://{s.host}:{s.port}"
+    webbrowser.open(url)
+    console.print(f"  [cyan]{url}[/cyan]")
 
 
 # ──────────────────────────────────────────
@@ -326,6 +422,8 @@ def mcp_server() -> None:
 # install-commands  (슬래시 커맨드 + MCP 등록)
 # ──────────────────────────────────────────
 
+INSTALL_DIR = Path(__file__).parent.parent.parent.resolve()
+
 _SLASH_TEMPLATES: dict[str, str] = {
     "cchwc-compare": """\
 두 에이전트(Claude Code + Codex)에 같은 프롬프트를 동시에 보내고 결과를 비교합니다.
@@ -359,6 +457,35 @@ cchwc debate "$ARGUMENTS"
 ```
 
 각 라운드의 논점과 최종 판정을 정리해 주세요.
+""",
+    "cchwc-start": """\
+cchwc 대시보드 서버를 백그라운드에서 시작합니다.
+
+Bash 도구로 아래 명령을 실행하세요:
+
+```bash
+cchwc start --open
+```
+
+서버가 시작되면 브라우저에서 http://127.0.0.1:7878 이 열립니다.
+""",
+    "cchwc-stop": """\
+실행 중인 cchwc 서버를 종료합니다.
+
+Bash 도구로 아래 명령을 실행하세요:
+
+```bash
+cchwc stop
+```
+""",
+    "cchwc-open": """\
+브라우저에서 cchwc 대시보드를 엽니다.
+
+Bash 도구로 아래 명령을 실행하세요:
+
+```bash
+cchwc open
+```
 """,
 }
 
