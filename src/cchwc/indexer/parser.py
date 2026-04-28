@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,7 +8,7 @@ from cchwc.core.schemas import ParsedSession
 
 def _make_naive(dt: datetime) -> datetime:
     if dt.tzinfo is not None:
-        return dt.astimezone(UTC).replace(tzinfo=None)
+        return dt.astimezone().replace(tzinfo=None)
     return dt
 
 
