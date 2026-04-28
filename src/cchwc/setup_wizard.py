@@ -156,7 +156,10 @@ def _install_cli(label: str, pkg: str, check_cmd: str, checks: dict,
     _fail(f"{check_cmd}  [dim]{t('not_found')}[/dim]")
     if questionary.confirm(t(prompt_key), default=True, style=_STYLE).ask():
         with Status(f"  {t('installing')}", spinner="dots"):
-            result = _run(["npm", "install", "-g", pkg])
+            result = subprocess.run(
+                ["npm", "install", "-g", pkg],
+                capture_output=True, text=True, shell=IS_WIN,
+            )
         if result.returncode == 0:
             _ok(f"{check_cmd}  {t('done')}")
         else:
@@ -173,7 +176,7 @@ def step_claude_cli(checks: dict) -> None:
 
     claude = shutil.which("claude")
     if claude and questionary.confirm(t("login_required"), default=True, style=_STYLE).ask():
-        subprocess.run(["claude", "login"])
+        subprocess.run(["claude", "login"], shell=IS_WIN)
     console.print()
 
 
