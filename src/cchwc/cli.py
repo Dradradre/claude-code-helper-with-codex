@@ -300,5 +300,124 @@ async def _run_mode(mode: str, prompt: str, cwd: str, config: dict | None = None
     console.print(f"\n[bold green]완료![/bold green] 토큰: {result.get('total_tokens', 0):,}")
 
 
+# ──────────────────────────────────────────
+# setup wizard
+# ──────────────────────────────────────────
+
+@app.command()
+def setup() -> None:
+    """대화형 설치 마법사를 실행합니다."""
+    from cchwc.setup_wizard import run_wizard
+    run_wizard()
+
+
+# ──────────────────────────────────────────
+# MCP server
+# ──────────────────────────────────────────
+
+@app.command("mcp-server")
+def mcp_server() -> None:
+    """MCP 서버를 실행합니다 (Claude Code 연동용 — stdio transport)."""
+    from cchwc.mcp_server import run
+    run()
+
+
+# ──────────────────────────────────────────
+# install-commands  (슬래시 커맨드 + MCP 등록)
+# ──────────────────────────────────────────
+
+_SLASH_TEMPLATES: dict[str, str] = {
+    "cchwc-compare": """\
+두 에이전트(Claude Code + Codex)에 같은 프롬프트를 동시에 보내고 결과를 비교합니다.
+
+Bash 도구를 사용해 아래 명령을 실행하고 결과를 보여주세요:
+
+```bash
+cchwc compare "$ARGUMENTS"
+```
+
+두 응답을 나란히 표시하고 핵심 차이점을 요약해 주세요.
+""",
+    "cchwc-review": """\
+한 에이전트가 구현하고 다른 에이전트가 코드 리뷰를 수행합니다.
+
+Bash 도구를 사용해 아래 명령을 실행하고 결과를 보여주세요:
+
+```bash
+cchwc review "$ARGUMENTS"
+```
+
+구현 결과와 리뷰 피드백, 수정 사항을 순서대로 정리해 주세요.
+""",
+    "cchwc-debate": """\
+두 에이전트가 주제를 놓고 토론하고 judge가 수렴 여부를 판정합니다.
+
+Bash 도구를 사용해 아래 명령을 실행하고 결과를 보여주세요:
+
+```bash
+cchwc debate "$ARGUMENTS"
+```
+
+각 라운드의 논점과 최종 판정을 정리해 주세요.
+""",
+}
+
+
+@app.command("install-commands")
+def install_commands(
+    scope: str = typer.Option("global", help="'global' (~/.claude) 또는 'project' (.claude)"),
+    mcp: bool = typer.Option(True, help="MCP 서버도 ~/.claude/mcp.json에 등록"),
+) -> None:
+    """Claude Code 슬래시 커맨드와 MCP 서버를 설치합니다.
+
+    설치 후 Claude Code에서 /cchwc-compare, /cchwc-review, /cchwc-debate 사용 가능.
+    """
+    import shutil
+    import sys
+
+    install_dir = Path(sys.executable).parent.parent.resolve()
+
+    base = Path.home() / ".claude" if scope == "global" else Path.cwd() / ".claude"
+
+    # ── 슬래시 커맨드 ──────────────────────────────────────────────────────
+    commands_dir = base / "commands"
+    commands_dir.mkdir(parents=True, exist_ok=True)
+
+    for name, content in _SLASH_TEMPLATES.items():
+        path = commands_dir / f"{name}.md"
+        path.write_text(content, encoding="utf-8")
+        console.print(f"  [green]✓[/green] {path}")
+
+    console.print(f"\n  슬래시 커맨드 설치 완료 ({scope})")
+    console.print("  Claude Code에서: /cchwc-compare, /cchwc-review, /cchwc-debate")
+
+    # ── MCP 서버 등록 ──────────────────────────────────────────────────────
+    if not mcp:
+        return
+
+    mcp_json_path = base / "mcp.json"
+
+    existing: dict = {}
+    if mcp_json_path.exists():
+        import json
+        with open(mcp_json_path, encoding="utf-8") as f:
+            existing = json.load(f)
+
+    uv_path = shutil.which("uv") or "uv"
+    existing.setdefault("mcpServers", {})["cchwc"] = {
+        "command": uv_path,
+        "args": ["run", "--project", str(install_dir), "cchwc", "mcp-server"],
+        "description": "cchwc — Claude+Codex 오케스트레이션 (compare/review/debate)",
+    }
+
+    import json
+    mcp_json_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(mcp_json_path, "w", encoding="utf-8") as f:
+        json.dump(existing, f, indent=2, ensure_ascii=False)
+
+    console.print(f"\n  [green]✓[/green] MCP 서버 등록: {mcp_json_path}")
+    console.print("  Claude Code 재시작 후 compare/review/debate 도구 사용 가능")
+
+
 if __name__ == "__main__":
     app()
