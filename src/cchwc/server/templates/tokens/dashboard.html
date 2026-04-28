@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Token Dashboard — cchwc{% endblock %}
+{% block content %}
+<h1 class="text-3xl font-bold mb-8">Token Usage</h1>
+
+<div id="summary" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8"></div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+        <h3 class="text-sm font-semibold text-gray-400 mb-3">Daily Token Usage (30 days)</h3>
+        <canvas id="daily-chart" height="200"></canvas>
+    </div>
+    <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+        <h3 class="text-sm font-semibold text-gray-400 mb-3">By Model</h3>
+        <canvas id="model-chart" height="200"></canvas>
+    </div>
+</div>
+
+<div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+    <h3 class="text-sm font-semibold text-gray-400 mb-3">By Project</h3>
+    <div id="project-table"></div>
+</div>
+
+<script>
+async function loadTokenData() {
+    const [summaryRes, dailyRes, modelRes, projectRes] = await Promise.all([
+        fetch('/api/tokens/summary').then(r => r.json()),
+        fetch('/api/tokens/daily?days=30').then(r => r.json()),
+        fetch('/api/tokens/by-model').then(r => r.json()),
+        fetch('/api/tokens/by-project').then(r => r.json()),
+    ]);
+
+    // Summary cards
+    const fmt = n => n.toLocaleString();
+    document.getElementById('summary').innerHTML = `
+        <div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
+            <div class="text-gray-400 text-xs">Total Input</div>
+            <div class="text-xl font-bold">${fmt(summaryRes.total_input_tokens)}</div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
+            <div class="text-gray-400 text-xs">Total Output</div>
+            <div class="text-xl font-bold">${fmt(summaryRes.total_output_tokens)}</div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
+            <div class="text-gray-400 text-xs">Cache Read</div>
+            <div class="text-xl font-bold">${fmt(summaryRes.total_cache_read_tokens)}</div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-3 border border-gray-700">
+            <div class="text-gray-400 text-xs">Sessions</div>
+            <div class="text-xl font-bold">${summaryRes.total_sessions}</div>
+        </div>`;
+
+    // Daily chart
+    const dates = [...new Set(dailyRes.map(d => d.date))].sort();
+    const claudeData = dates.map(d => {
+        const row = dailyRes.find(r => r.date === d && r.agent_type === 'claude');
+        return row ? row.input_tokens + row.output_tokens : 0;
+    });
+    const codexData = dates.map(d => {
+        const row = dailyRes.find(r => r.date === d && r.agent_type === 'codex');
+        return row ? row.input_tokens + row.output_tokens : 0;
+    });
+
+    new Chart(document.getElementById('daily-chart'), {
+        type: 'bar',
+        data: {
+            labels: dates,
+            datasets: [
+                { label: 'Claude', data: claudeData, backgroundColor: '#3b82f6' },
+                { label: 'Codex', data: codexData, backgroundColor: '#10b981' },
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                x: { stacked: true, ticks: { color: '#9ca3af' }, grid: { color: '#374151' } },
+                y: { stacked: true, ticks: { color: '#9ca3af' }, grid: { color: '#374151' } }
+            },
+            plugins: { legend: { labels: { color: '#d1d5db' } } }
+        }
+    });
+
+    // Model chart
+    if (modelRes.length > 0) {
+        new Chart(document.getElementById('model-chart'), {
+            type: 'doughnut',
+            data: {
+                labels: modelRes.map(m => m.model || 'unknown'),
+                datasets: [{
+                    data: modelRes.map(m => m.input_tokens + m.output_tokens),
+                    backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'],
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { labels: { color: '#d1d5db' } } }
+            }
+        });
+    }
+
+    // Project table
+    let html = '<table class="w-full text-sm"><thead class="text-gray-400"><tr>' +
+        '<th class="text-left px-3 py-2">Project</th><th class="text-right px-3 py-2">Input</th>' +
+        '<th class="text-right px-3 py-2">Output</th><th class="text-right px-3 py-2">Sessions</th></tr></thead><tbody>';
+    for (const p of projectRes) {
+        html += `<tr class="border-t border-gray-800"><td class="px-3 py-2">${p.project}</td>` +
+            `<td class="px-3 py-2 text-right">${fmt(p.input_tokens)}</td>` +
+            `<td class="px-3 py-2 text-right">${fmt(p.output_tokens)}</td>` +
+            `<td class="px-3 py-2 text-right">${p.session_count}</td></tr>`;
+    }
+    html += '</tbody></table>';
+    document.getElementById('project-table').innerHTML = html;
+}
+
+loadTokenData();
+</script>
+{% endblock %}

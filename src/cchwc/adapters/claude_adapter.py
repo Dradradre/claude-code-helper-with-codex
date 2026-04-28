@@ -1,1 +1,157 @@
-"""Claude 세션 어댑터 — Phase 1에서 구현 예정."""
+import json
+import re
+from collections.abc import Iterator
+from datetime import datetime
+from pathlib import Path
+
+from cchwc.adapters.base import SessionAdapter
+from cchwc.core.schemas import ParsedMessage, ParsedSession, TokenUsage
+
+
+class ClaudeAdapter(SessionAdapter):
+    agent_type = "claude"
+
+    def __init__(self, root: Path | None = None):
+        self._root = root or (Path.home() / ".claude" / "projects")
+
+    def session_root(self) -> Path:
+        return self._root
+
+    def discover_session_files(self) -> Iterator[Path]:
+        root = self.session_root()
+        if not root.exists():
+            return
+        yield from root.rglob("*.jsonl")
+
+    def parse_file(self, path: Path) -> ParsedSession | None:
+        lines = self._read_jsonl(path)
+        if not lines:
+            return None
+
+        session_id = None
+        cwd = None
+        messages: list[ParsedMessage] = []
+        total = TokenUsage()
+        seq = 0
+
+        for record in lines:
+            rec_type = record.get("type")
+
+            if rec_type == "permission-mode":
+                session_id = record.get("sessionId", session_id)
+                continue
+
+            if session_id is None:
+                session_id = record.get("sessionId")
+
+            if cwd is None:
+                cwd = record.get("cwd")
+
+            if rec_type in ("user", "assistant"):
+                msg = record.get("message", {})
+                role = msg.get("role", rec_type)
+                content_text = self._extract_text(msg.get("content"))
+                ts = record.get("timestamp", "")
+                model = msg.get("model")
+
+                usage = msg.get("usage", {})
+                inp = usage.get("input_tokens", 0)
+                out = usage.get("output_tokens", 0)
+                cache_read = usage.get("cache_read_input_tokens", 0)
+                cache_create = usage.get("cache_creation_input_tokens", 0)
+
+                total.input_tokens += inp
+                total.output_tokens += out
+                total.cache_read_tokens += cache_read
+                total.cache_creation_tokens += cache_create
+
+                messages.append(
+                    ParsedMessage(
+                        sequence=seq,
+                        role=role,
+                        content_text=content_text,
+                        content_json=json.dumps(msg, ensure_ascii=False),
+                        timestamp=self._parse_ts(ts),
+                        input_tokens=inp or None,
+                        output_tokens=out or None,
+                        cache_read_tokens=cache_read or None,
+                        cache_creation_tokens=cache_create or None,
+                        model=model,
+                    )
+                )
+                seq += 1
+
+        if not messages or session_id is None:
+            return None
+
+        if cwd is None:
+            cwd = self.extract_cwd(path)
+
+        return ParsedSession(
+            agent_type=self.agent_type,
+            external_id=session_id,
+            file_path=str(path),
+            cwd=cwd,
+            started_at=messages[0].timestamp,
+            last_message_at=messages[-1].timestamp,
+            messages=messages,
+            total_usage=total,
+        )
+
+    def extract_cwd(self, path: Path) -> str | None:
+        project_dir = path.parent.name
+        if not project_dir:
+            return None
+        decoded = re.sub(r"^-", "/", project_dir)
+        decoded = decoded.replace("-", "/")
+        if len(decoded) > 2 and decoded[2] == "/":
+            decoded = decoded[0] + ":" + decoded[2:]
+        return decoded
+
+    def _read_jsonl(self, path: Path) -> list[dict]:
+        records = []
+        try:
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        records.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+        except OSError:
+            return []
+        return records
+
+    def _extract_text(self, content) -> str | None:
+        if content is None:
+            return None
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts = []
+            for block in content:
+                if isinstance(block, str):
+                    parts.append(block)
+                elif isinstance(block, dict):
+                    if block.get("type") == "text":
+                        parts.append(block.get("text", ""))
+                    elif block.get("type") == "tool_use":
+                        parts.append(f"[tool_use: {block.get('name', '')}]")
+                    elif block.get("type") == "tool_result":
+                        result_content = block.get("content", "")
+                        if isinstance(result_content, str):
+                            parts.append(result_content[:500])
+                    elif block.get("type") == "thinking":
+                        pass
+            return "\n".join(parts) if parts else None
+        return None
+
+    def _parse_ts(self, ts: str) -> datetime:
+        if not ts:
+            return datetime.now()
+        try:
+            return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        except ValueError:
+            return datetime.now()

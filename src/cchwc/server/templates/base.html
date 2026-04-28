@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}cchwc{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="https://unpkg.com/htmx-ext-sse@2.3.0/sse.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        .message-user { border-left: 4px solid #3b82f6; }
+        .message-assistant { border-left: 4px solid #10b981; }
+        .message-tool_use { border-left: 4px solid #f59e0b; }
+        .message-tool_result { border-left: 4px solid #6b7280; }
+        .message-system { border-left: 4px solid #8b5cf6; }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+    <nav class="bg-gray-900 border-b border-gray-800 px-6 py-3">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <a href="/" class="text-xl font-bold text-white">cchwc</a>
+            <div class="flex gap-6">
+                <a href="/" class="text-gray-300 hover:text-white">Dashboard</a>
+                <a href="/sessions" class="text-gray-300 hover:text-white">Sessions</a>
+                <a href="/tokens" class="text-gray-300 hover:text-white">Tokens</a>
+                <a href="/orchestrate" class="text-gray-300 hover:text-white">Orchestrate</a>
+            </div>
+        </div>
+    </nav>
+    <main class="max-w-7xl mx-auto px-6 py-8">
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

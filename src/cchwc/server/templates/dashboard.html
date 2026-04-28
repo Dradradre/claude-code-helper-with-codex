@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — cchwc{% endblock %}
+{% block content %}
+<h1 class="text-3xl font-bold mb-8">Dashboard</h1>
+
+<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+    <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+        <div class="text-gray-400 text-sm">Sessions</div>
+        <div class="text-2xl font-bold">{{ total_sessions }}</div>
+    </div>
+    <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+        <div class="text-gray-400 text-sm">Projects</div>
+        <div class="text-2xl font-bold">{{ total_projects }}</div>
+    </div>
+    <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+        <div class="text-gray-400 text-sm">Messages</div>
+        <div class="text-2xl font-bold">{{ "{:,}".format(total_messages) }}</div>
+    </div>
+    <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+        <div class="text-gray-400 text-sm">Input Tokens</div>
+        <div class="text-2xl font-bold">{{ "{:,}".format(total_input_tokens) }}</div>
+    </div>
+    <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+        <div class="text-gray-400 text-sm">Output Tokens</div>
+        <div class="text-2xl font-bold">{{ "{:,}".format(total_output_tokens) }}</div>
+    </div>
+</div>
+
+<h2 class="text-xl font-semibold mb-4">Recent Sessions</h2>
+<div class="bg-gray-900 rounded-lg border border-gray-800 overflow-hidden">
+    <table class="w-full text-sm">
+        <thead class="bg-gray-800">
+            <tr>
+                <th class="px-4 py-2 text-left">Agent</th>
+                <th class="px-4 py-2 text-left">Project</th>
+                <th class="px-4 py-2 text-left">Last Active</th>
+                <th class="px-4 py-2 text-right">Messages</th>
+                <th class="px-4 py-2 text-right">Tokens</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in recent_sessions %}
+            <tr class="border-t border-gray-800 hover:bg-gray-800/50">
+                <td class="px-4 py-2">
+                    <span class="px-2 py-0.5 rounded text-xs font-medium {% if item.session.agent_type == 'claude' %}bg-blue-900 text-blue-300{% else %}bg-green-900 text-green-300{% endif %}">
+                        {{ item.session.agent_type }}
+                    </span>
+                </td>
+                <td class="px-4 py-2">
+                    <a href="/sessions/{{ item.session.id }}" class="text-blue-400 hover:underline">
+                        {{ item.project.display_name if item.project else 'unknown' }}
+                    </a>
+                </td>
+                <td class="px-4 py-2 text-gray-400">{{ item.session.last_message_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td class="px-4 py-2 text-right">{{ item.session.message_count }}</td>
+                <td class="px-4 py-2 text-right text-gray-400">
+                    {{ "{:,}".format(item.session.total_input_tokens + item.session.total_output_tokens) }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
