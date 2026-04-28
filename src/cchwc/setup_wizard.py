@@ -175,8 +175,20 @@ def step_claude_cli(checks: dict) -> None:
                  "install_claude_prompt", "login_hint_claude")
 
     claude = shutil.which("claude")
-    if claude and questionary.confirm(t("login_required"), default=True, style=_STYLE).ask():
-        subprocess.run(["claude", "login"], shell=IS_WIN)
+    if claude:
+        # 이미 로그인 여부 확인 (claude config list 로 체크)
+        probe = subprocess.run(
+            ["claude", "config", "list"],
+            capture_output=True, text=True, shell=IS_WIN,
+        )
+        if probe.returncode == 0:
+            _ok(t("login_ok"))
+        else:
+            console.print()
+            console.print(f"  [yellow]{t('login_manual')}[/yellow]")
+            console.print("  [bold cyan]  claude login[/bold cyan]")
+            console.print(f"  [dim]{t('login_manual_hint')}[/dim]")
+            questionary.press_any_key_to_continue(t("login_press_key"), style=_STYLE).ask()
     console.print()
 
 
