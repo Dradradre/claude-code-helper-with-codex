@@ -36,6 +36,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "login_manual":          "Run this in a NEW terminal window (outside Claude Code):",
         "login_manual_hint":     "Claude Code intercepts interactive commands — open a separate terminal.",
         "login_press_key":       "Press any key once you've logged in…",
+        "codex_login_ok":        "Codex already authenticated",
+        "codex_login_manual":    "Run this in a NEW terminal window (outside Claude Code):",
         # ── scope ────────────────────────────────────────────────
         "scope_prompt":          "Which sessions should cchwc index?",
         "scope_global":          "Global  — everything in ~/.claude/projects (all projects)",
@@ -100,6 +102,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "login_manual":          "새 터미널 창을 열고 (Claude Code 밖에서) 아래 명령을 실행하세요:",
         "login_manual_hint":     "Claude Code 안에서는 대화형 명령 실행이 불가합니다.",
         "login_press_key":       "로그인 완료 후 아무 키나 누르세요…",
+        "codex_login_ok":        "Codex 로그인 확인됨",
+        "codex_login_manual":    "새 터미널 창을 열고 (Claude Code 밖에서) 아래 명령을 실행하세요:",
         "scope_prompt":          "어떤 세션을 인덱싱할까요?",
         "scope_global":          "전체  — ~/.claude/projects 전체 (모든 프로젝트)",
         "scope_current":         "현재  — 현재 디렉토리 프로젝트만",

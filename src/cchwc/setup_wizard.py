@@ -197,6 +197,22 @@ def step_codex_cli() -> None:
     console.print()
     _install_cli("Codex", "@openai/codex", "codex", {},
                  "install_codex_prompt", "login_hint_codex")
+
+    codex = shutil.which("codex")
+    if codex:
+        # codex config get api-key 로 로그인 여부 확인
+        probe = subprocess.run(
+            ["codex", "config", "get", "api-key"],
+            capture_output=True, text=True, shell=IS_WIN,
+        )
+        if probe.returncode == 0 and probe.stdout.strip():
+            _ok(t("codex_login_ok"))
+        else:
+            console.print()
+            console.print(f"  [yellow]{t('codex_login_manual')}[/yellow]")
+            console.print("  [bold cyan]  codex login[/bold cyan]")
+            console.print(f"  [dim]{t('login_manual_hint')}[/dim]")
+            questionary.press_any_key_to_continue(t("login_press_key"), style=_STYLE).ask()
     console.print()
 
 
