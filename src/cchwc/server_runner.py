@@ -87,7 +87,7 @@ def _make_adapters(settings):
     scan_roots = settings.scan_roots if settings.scan_mode == "project" and settings.scan_roots else None
     return [
         ClaudeAdapter(settings.claude_root, scan_roots=scan_roots),
-        CodexAdapter(settings.codex_root),
+        CodexAdapter(settings.codex_root, scan_roots=scan_roots),
     ]
 
 

@@ -330,8 +330,7 @@ async def _scan(scan_roots, do_claude, do_codex, settings=None) -> None:
     if do_claude:
         adapters.append(ClaudeAdapter(settings.claude_root, scan_roots=scan_roots))
     if do_codex:
-        # Codex는 날짜 기반 디렉토리 구조라 project filter 미지원 → global만
-        adapters.append(CodexAdapter(settings.codex_root))
+        adapters.append(CodexAdapter(settings.codex_root, scan_roots=scan_roots))
 
     async with session_factory() as db:
         for adapter in adapters:

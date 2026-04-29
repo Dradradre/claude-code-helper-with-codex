@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from collections.abc import Iterator
 from datetime import datetime
@@ -11,8 +12,19 @@ from cchwc.core.schemas import ParsedMessage, ParsedSession, TokenUsage
 class CodexAdapter(SessionAdapter):
     agent_type = "codex"
 
-    def __init__(self, root: Path | None = None):
+    def __init__(self, root: Path | None = None, scan_roots: list[str] | None = None):
         self._root = root or (Path.home() / ".codex" / "sessions")
+        self._scan_roots = scan_roots  # None = global, [cwd...] = filter by cwd
+
+    def _matches_scan_roots(self, cwd: str) -> bool:
+        if not self._scan_roots:
+            return True
+        cwd_norm = os.path.normcase(os.path.normpath(cwd))
+        for r in self._scan_roots:
+            r_norm = os.path.normcase(os.path.normpath(r))
+            if cwd_norm == r_norm or cwd_norm.startswith(r_norm + os.sep):
+                return True
+        return False
 
     def session_root(self) -> Path:
         return self._root
@@ -119,6 +131,10 @@ class CodexAdapter(SessionAdapter):
 
         if session_id is None:
             session_id = path.stem
+
+        if cwd is not None and self._scan_roots is not None:
+            if not self._matches_scan_roots(cwd):
+                return None
 
         return ParsedSession(
             agent_type=self.agent_type,
