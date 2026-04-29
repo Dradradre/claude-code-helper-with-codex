@@ -6,7 +6,7 @@ from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from cchwc.server.routers import orchestrate, pages, search, sessions, tokens
+from cchwc.server.routers import fs, orchestrate, pages, search, sessions, tokens
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 STATIC_DIR = Path(__file__).parent / "static"
@@ -25,6 +25,7 @@ def create_app() -> FastAPI:
     app.include_router(tokens.router, prefix="/api/tokens", tags=["tokens"])
     app.include_router(search.router, prefix="/api/search", tags=["search"])
     app.include_router(orchestrate.router, prefix="/api/orchestrate", tags=["orchestrate"])
+    app.include_router(fs.router, prefix="/api/fs", tags=["fs"])
 
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

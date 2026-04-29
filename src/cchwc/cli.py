@@ -197,10 +197,24 @@ def uninstall(
             pid = int(_PID_FILE.read_text().strip())
             if _terminate_pid(pid):
                 console.print(f"  [green]✓[/green]  서버 종료 (PID {pid})")
-                time.sleep(1.0)  # DB 파일 락 해제 대기
         except (OSError, ValueError):
             pass
         _PID_FILE.unlink(missing_ok=True)
+
+    # 헬스 체크로 서버가 완전히 내려올 때까지 대기 (최대 10초)
+    if _server_health_ok():
+        console.print("  [dim]서버 종료 대기 중...[/dim]")
+        for _ in range(20):
+            time.sleep(0.5)
+            if not _server_health_ok():
+                break
+        else:
+            console.print(
+                "  [yellow]⚠  서버가 아직 실행 중입니다.[/yellow]\n"
+                "  [dim]먼저 서버를 종료하세요: [cyan]cchwc stop[/cyan][/dim]"
+            )
+
+    time.sleep(0.5)  # 파일 핸들 해제 여유
 
     # ── 2. autostart 제거 ─────────────────────────────────────────
     from cchwc.server_runner import remove_autostart
@@ -232,29 +246,36 @@ def uninstall(
             pass
 
     # ── 4. DB / 설정 삭제 ────────────────────────────────────────
+    data_ok = True
     if not keep_data:
         import time
         cchwc_dir = Path.home() / ".cchwc"
         if cchwc_dir.exists():
-            for attempt in range(10):
+            data_ok = False
+            for attempt in range(20):  # 최대 10초 재시도
                 try:
                     _shutil.rmtree(cchwc_dir)
                     console.print("  [green]✓[/green]  데이터 삭제 (~/.cchwc/)")
+                    data_ok = True
                     break
                 except PermissionError:
-                    if attempt == 9:
-                        console.print(
-                            "  [red]✗[/red]  DB 파일이 잠겨 있습니다.\n"
-                            "  [dim]서버가 완전히 종료될 때까지 기다렸다가 다시 실행하세요:[/dim]\n"
-                            "  [cyan]cchwc uninstall --yes[/cyan]"
-                        )
-                    else:
+                    if attempt < 19:
                         time.sleep(0.5)
+            if not data_ok:
+                console.print(
+                    "  [red]✗[/red]  DB 파일이 잠겨 있습니다.\n"
+                    "  [dim]서버를 종료한 뒤 다시 실행하세요:[/dim]\n"
+                    "  [cyan]cchwc stop && cchwc uninstall --yes[/cyan]"
+                )
     else:
         console.print("  [dim]→  데이터 유지 (--keep-data)[/dim]")
 
-    console.print("\n  [bold]cchwc가 제거되었습니다.[/bold]")
-    console.print("  [dim]소스 코드는 클론한 디렉토리를 직접 삭제하세요.[/dim]")
+    if data_ok:
+        console.print("\n  [bold]cchwc가 제거되었습니다.[/bold]")
+        console.print("  [dim]소스 코드는 클론한 디렉토리를 직접 삭제하세요.[/dim]")
+    else:
+        console.print("\n  [yellow]일부 파일이 삭제되지 않았습니다.[/yellow]")
+        console.print("  [dim]서버 종료 후 다시 실행하세요: [cyan]cchwc stop && cchwc uninstall --yes[/cyan][/dim]")
 
 
 def _do_open() -> None:

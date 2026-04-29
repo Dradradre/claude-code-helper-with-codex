@@ -55,21 +55,47 @@ async def judge_round(
 
 
 def _parse_judgment(text: str) -> dict:
-    try:
-        return json.loads(text)
-    except (json.JSONDecodeError, TypeError):
-        start = text.find("{")
-        end = text.rfind("}") + 1
-        if start >= 0 and end > start:
-            try:
-                return json.loads(text[start:end])
-            except json.JSONDecodeError:
-                pass
+    for candidate in _json_candidates(text):
+        try:
+            parsed = json.loads(candidate)
+            if isinstance(parsed, dict) and "status" in parsed:
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # Fallback: synthesize from raw text
+    text_lower = (text or "").lower()
+    if "converged" in text_lower:
+        status = "converged"
+        should_continue = False
+    elif "stalemate" in text_lower:
+        status = "stalemate"
+        should_continue = False
+    else:
+        status = "diverged"
+        should_continue = True
 
     return {
-        "status": "stalemate",
+        "status": status,
         "agreement_points": [],
-        "disagreement_points": ["Could not parse judgment"],
-        "should_continue": False,
-        "synthesis": text[:500] if text else "No judgment produced",
+        "disagreement_points": [],
+        "should_continue": should_continue,
+        "synthesis": text[:800] if text else "No judgment produced",
     }
+
+
+def _json_candidates(text: str) -> list[str]:
+    import re
+
+    candidates = []
+    # Markdown code blocks: ```json ... ``` or ``` ... ```
+    for m in re.finditer(r"```(?:json)?\s*([\s\S]*?)```", text):
+        candidates.append(m.group(1).strip())
+    # Raw braces
+    start = text.find("{")
+    end = text.rfind("}") + 1
+    if start >= 0 and end > start:
+        candidates.append(text[start:end])
+    # Whole text
+    candidates.append(text)
+    return candidates

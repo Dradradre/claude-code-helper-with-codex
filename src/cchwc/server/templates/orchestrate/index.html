@@ -2,6 +2,23 @@
 {% block title %}Orchestrate — cchwc{% endblock %}
 {% block content %}
 
+<style>
+  .agent-claude  { --agent-bg: #f5f3ff; --agent-border: #ddd6fe; --agent-badge: #ede9fe; --agent-text: #5b21b6; }
+  .agent-codex   { --agent-bg: #f0fdf4; --agent-border: #bbf7d0; --agent-badge: #d1fae5; --agent-text: #065f46; }
+  .agent-judge   { --agent-bg: #eff6ff; --agent-border: #bfdbfe; --agent-badge: #dbeafe; --agent-text: #1d4ed8; }
+  .agent-error   { --agent-bg: #fef2f2; --agent-border: #fecaca; --agent-badge: #fee2e2; --agent-text: #b91c1c; }
+  .agent-card    { background: var(--agent-bg); border: 1px solid var(--agent-border); }
+  .agent-badge   { background: var(--agent-badge); color: var(--agent-text); }
+
+  #dir-modal-backdrop { backdrop-filter: blur(2px); }
+
+  .tree-item:hover { background: #f9fafb; }
+  .tree-file:hover { background: #eff6ff; }
+
+  #mention-dropdown { bottom: 100%; margin-bottom: 4px; }
+</style>
+
+<!-- Header -->
 <div class="mb-8">
   <h1 class="text-2xl font-semibold text-gray-900">Orchestrate</h1>
   <p class="text-sm text-gray-500 mt-1">Claude와 Codex를 협업시키는 실험적 기능</p>
@@ -9,65 +26,162 @@
 
 <!-- Mode cards -->
 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-  {% for mode, color, title, desc in [
-    ('compare', 'blue',   'Compare',  '같은 프롬프트를 양쪽에 동시에 전달하고 결과를 나란히 비교합니다.'),
-    ('review',  'violet', 'Review',   '한쪽이 구현하면 다른 쪽이 코드 리뷰하고, 피드백에 따라 수정합니다.'),
-    ('debate',  'emerald','Debate',   '특정 주제로 토론하고 judge가 수렴 여부를 판정합니다.'),
+  {% for mode, color, icon, title, desc in [
+    ('compare', 'blue',   'M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2', 'Compare',  '같은 프롬프트를 양쪽에 동시에 전달하고 결과를 나란히 비교합니다.'),
+    ('review',  'violet', 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4', 'Review',   '한쪽이 구현하면 다른 쪽이 코드 리뷰하고, 피드백에 따라 수정합니다.'),
+    ('debate',  'emerald','M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z', 'Debate',   '특정 주제로 토론하고 judge가 수렴 여부를 판정합니다.'),
   ] %}
-  <div class="bg-white rounded-xl border border-gray-200 p-5 flex flex-col gap-3">
-    <div class="flex items-center gap-2">
-      <span class="inline-block w-2 h-2 rounded-full bg-{{ color }}-500"></span>
+  <div class="bg-white rounded-xl border border-gray-200 p-5 flex flex-col gap-3 hover:border-{{ color }}-300 transition-colors">
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-lg bg-{{ color }}-50 flex items-center justify-center">
+        <svg class="w-4 h-4 text-{{ color }}-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ icon }}"/>
+        </svg>
+      </div>
       <h3 class="text-sm font-semibold text-gray-900">{{ title }}</h3>
     </div>
     <p class="text-sm text-gray-500 flex-1">{{ desc }}</p>
-    <button
-      onclick="showForm('{{ mode }}')"
-      class="mt-1 w-full text-sm font-medium py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors text-gray-700"
-    >
+    <button onclick="showForm('{{ mode }}')"
+      class="mt-1 w-full text-sm font-medium py-2 rounded-lg bg-{{ color }}-50 text-{{ color }}-700 border border-{{ color }}-200 hover:bg-{{ color }}-100 transition-colors">
       시작하기
     </button>
   </div>
   {% endfor %}
 </div>
 
-<!-- Form -->
-<div id="run-form" class="hidden bg-white rounded-xl border border-gray-200 p-6 mb-6">
-  <h3 id="form-title" class="text-sm font-semibold text-gray-900 mb-4"></h3>
-  <input type="hidden" id="mode-input">
-  <div class="space-y-4">
-    <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1.5">프롬프트</label>
-      <textarea id="prompt-input" rows="4"
-        class="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+<!-- Form + Tree layout -->
+<div id="form-area" class="hidden mb-6">
+  <div class="flex gap-4">
+
+    <!-- File tree sidebar -->
+    <div id="tree-sidebar" class="hidden w-64 flex-shrink-0">
+      <div class="bg-white rounded-xl border border-gray-200 h-full">
+        <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <span class="text-xs font-semibold text-gray-600">파일 트리</span>
+          <span class="text-xs text-gray-400" id="tree-root-label"></span>
+        </div>
+        <div id="file-tree" class="p-2 overflow-y-auto max-h-80 text-xs"></div>
+      </div>
     </div>
-    <div>
-      <label class="block text-xs font-medium text-gray-700 mb-1.5">작업 디렉토리</label>
-      <input type="text" id="cwd-input" value="."
-        class="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+
+    <!-- Form panel -->
+    <div class="flex-1 bg-white rounded-xl border border-gray-200 p-6">
+      <h3 id="form-title" class="text-sm font-semibold text-gray-900 mb-4"></h3>
+      <input type="hidden" id="mode-input">
+      <div class="space-y-4">
+
+        <!-- Prompt with @mention -->
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1.5">
+            프롬프트
+            <span class="font-normal text-gray-400 ml-1">— 파일 언급: <code class="bg-gray-100 px-1 rounded">@파일명</code></span>
+          </label>
+          <div id="prompt-container" class="relative">
+            <textarea id="prompt-input" rows="5"
+              class="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              placeholder="프롬프트를 입력하세요..."></textarea>
+            <!-- @mention dropdown -->
+            <div id="mention-dropdown"
+              class="hidden absolute left-0 right-0 z-40 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+            </div>
+          </div>
+        </div>
+
+        <!-- Directory picker -->
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1.5">작업 디렉토리</label>
+          <div class="flex gap-2">
+            <div class="flex-1 flex items-center px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 min-w-0">
+              <svg class="w-3.5 h-3.5 text-gray-400 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/>
+              </svg>
+              <span id="cwd-display" class="text-gray-700 truncate font-mono text-xs">.</span>
+            </div>
+            <button onclick="openDirBrowser()"
+              class="px-3 py-2 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1.5 flex-shrink-0">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+              </svg>
+              찾기
+            </button>
+          </div>
+        </div>
+
+        <div class="flex gap-2 pt-1">
+          <button onclick="startRun()"
+            class="px-5 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors">
+            실행
+          </button>
+          <button onclick="hideForm()"
+            class="px-4 py-2 text-sm text-gray-600 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+            취소
+          </button>
+        </div>
+      </div>
     </div>
-    <div class="flex gap-2">
-      <button onclick="startRun()"
-        class="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors">
-        실행
+
+  </div>
+</div>
+
+<!-- ── Directory browser modal ─────────────────────────────────── -->
+<div id="dir-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+  <div id="dir-modal-backdrop" class="absolute inset-0 bg-black/30" onclick="closeDirBrowser()"></div>
+  <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 flex flex-col" style="max-height: 70vh;">
+    <!-- Modal header -->
+    <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+      <h3 class="text-sm font-semibold text-gray-900">디렉토리 선택</h3>
+      <button onclick="closeDirBrowser()" class="text-gray-400 hover:text-gray-600">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
       </button>
-      <button onclick="document.getElementById('run-form').classList.add('hidden')"
-        class="px-4 py-2 text-sm text-gray-600 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
-        취소
-      </button>
+    </div>
+
+    <!-- Path breadcrumb -->
+    <div class="px-5 py-2 border-b border-gray-100 flex-shrink-0 overflow-x-auto">
+      <div id="browser-breadcrumb" class="flex items-center gap-1 text-xs text-gray-500 whitespace-nowrap"></div>
+    </div>
+
+    <!-- Drive shortcuts (Windows) -->
+    <div id="browser-drives" class="hidden px-5 py-2 border-b border-gray-100 flex-shrink-0">
+      <div class="flex gap-1.5 flex-wrap" id="browser-drives-list"></div>
+    </div>
+
+    <!-- Entry list -->
+    <div id="browser-entries" class="overflow-y-auto flex-1 px-2 py-2">
+      <div class="text-sm text-gray-400 text-center py-8">불러오는 중...</div>
+    </div>
+
+    <!-- Footer -->
+    <div class="px-5 py-4 border-t border-gray-100 flex items-center justify-between flex-shrink-0 bg-gray-50 rounded-b-2xl">
+      <span id="browser-selected-path" class="text-xs text-gray-500 font-mono truncate flex-1 mr-4"></span>
+      <div class="flex gap-2 flex-shrink-0">
+        <button onclick="closeDirBrowser()"
+          class="px-3 py-1.5 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-white transition-colors">
+          취소
+        </button>
+        <button onclick="confirmDirSelection()"
+          class="px-4 py-1.5 text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors">
+          선택
+        </button>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- Output -->
+<!-- ── Output panel ─────────────────────────────────────────────── -->
 <div id="run-output" class="hidden bg-white rounded-xl border border-gray-200 p-6 mb-6">
-  <div class="flex items-center justify-between mb-4">
+  <div class="flex items-center justify-between mb-5">
     <h3 class="text-sm font-semibold text-gray-900">실행 결과</h3>
-    <span id="run-status" class="text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-medium">실행 중</span>
+    <span id="run-status"
+      class="text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-medium">
+      실행 중
+    </span>
   </div>
   <div id="run-steps" class="space-y-3"></div>
 </div>
 
-<!-- Recent runs -->
+<!-- ── Recent runs ──────────────────────────────────────────────── -->
 <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
   <div class="px-5 py-4 border-b border-gray-100">
     <h3 class="text-sm font-semibold text-gray-700">최근 실행</h3>
@@ -80,53 +194,567 @@
 </div>
 
 <script>
+// ── State ─────────────────────────────────────────────────────────
+let selectedCwd = '.';
+let fileTree = [];
+let allFiles = [];   // flat: {name, relPath, fullPath}
+let mentionAtPos = -1;
+let mentionSelectedIdx = 0;
+let currentBrowsePath = '~';
+let currentMode = '';
+
+// ── Mode form ─────────────────────────────────────────────────────
 function showForm(mode) {
-  const titles = { compare: 'Compare', review: 'Review', debate: 'Debate' };
+  const titles = { compare: 'Compare 모드', review: 'Review 모드', debate: 'Debate 모드' };
+  currentMode = mode;
   document.getElementById('mode-input').value = mode;
-  document.getElementById('form-title').textContent = titles[mode] + ' 모드';
-  document.getElementById('run-form').classList.remove('hidden');
+  document.getElementById('form-title').textContent = titles[mode];
+  document.getElementById('form-area').classList.remove('hidden');
   document.getElementById('prompt-input').focus();
+  document.getElementById('run-output').classList.add('hidden');
+  window.scrollTo({ top: document.getElementById('form-area').offsetTop - 80, behavior: 'smooth' });
 }
 
+function hideForm() {
+  document.getElementById('form-area').classList.add('hidden');
+}
+
+// ── Directory browser ─────────────────────────────────────────────
+async function openDirBrowser() {
+  document.getElementById('dir-modal').classList.remove('hidden');
+  await loadBrowsePath(selectedCwd === '.' ? '~' : selectedCwd);
+}
+
+function closeDirBrowser() {
+  document.getElementById('dir-modal').classList.add('hidden');
+}
+
+async function loadBrowsePath(path) {
+  currentBrowsePath = path;
+  document.getElementById('browser-entries').innerHTML =
+    '<div class="text-sm text-gray-400 text-center py-8">불러오는 중...</div>';
+
+  try {
+    const res = await fetch('/api/fs/browse?path=' + encodeURIComponent(path));
+    const data = await res.json();
+    currentBrowsePath = data.path;
+    renderBrowser(data);
+  } catch (e) {
+    document.getElementById('browser-entries').innerHTML =
+      '<div class="text-sm text-red-400 text-center py-8">로드 실패: ' + escHtml(String(e)) + '</div>';
+  }
+}
+
+function renderBrowser(data) {
+  // Breadcrumb
+  const breadcrumb = document.getElementById('browser-breadcrumb');
+  const parts = data.path.replace(/\\/g, '/').split('/').filter(Boolean);
+  // Build cumulative paths
+  let cumPaths = [];
+  if (data.path.match(/^[A-Z]:\//)) {
+    // Windows: first part is drive like "C:"
+    cumPaths.push(parts[0] + '/');
+    for (let i = 1; i < parts.length; i++) {
+      cumPaths.push(cumPaths[i-1] + parts[i] + '/');
+    }
+  } else {
+    cumPaths.push('/');
+    for (let i = 0; i < parts.length; i++) {
+      cumPaths.push('/' + parts.slice(0, i+1).join('/'));
+    }
+  }
+
+  breadcrumb.innerHTML = '';
+  const displayParts = data.path.replace(/\\/g, '/').split('/').filter(Boolean);
+  displayParts.forEach((part, i) => {
+    if (i > 0) {
+      const sep = document.createElement('span');
+      sep.textContent = '/';
+      sep.className = 'text-gray-300';
+      breadcrumb.appendChild(sep);
+    }
+    const btn = document.createElement('button');
+    btn.textContent = part;
+    btn.className = 'hover:text-gray-900 transition-colors px-0.5 rounded hover:bg-gray-100';
+    const targetPath = cumPaths[i] || data.path;
+    btn.onclick = () => loadBrowsePath(targetPath);
+    breadcrumb.appendChild(btn);
+  });
+
+  // Drives (Windows)
+  const drivesDiv = document.getElementById('browser-drives');
+  const drivesList = document.getElementById('browser-drives-list');
+  if (data.drives && data.drives.length > 0) {
+    drivesDiv.classList.remove('hidden');
+    drivesList.innerHTML = data.drives.map(d =>
+      `<button onclick="loadBrowsePath('${d}')" class="px-2 py-0.5 text-xs border border-gray-200 rounded hover:bg-gray-100 font-mono">${d}</button>`
+    ).join('');
+  } else {
+    drivesDiv.classList.add('hidden');
+  }
+
+  // Home button
+  const homePath = data.home;
+
+  // Entries
+  const container = document.getElementById('browser-entries');
+  container.innerHTML = '';
+
+  // Parent directory entry
+  if (data.parent) {
+    const parentBtn = document.createElement('button');
+    parentBtn.className = 'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-gray-50 text-sm text-gray-500';
+    parentBtn.innerHTML = `
+      <svg class="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+      <span class="font-mono text-xs">.. (상위 폴더)</span>`;
+    parentBtn.onclick = () => loadBrowsePath(data.parent);
+    container.appendChild(parentBtn);
+  }
+
+  // Home shortcut
+  if (homePath && homePath !== data.path) {
+    const homeBtn = document.createElement('button');
+    homeBtn.className = 'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-blue-50 text-sm text-blue-600';
+    homeBtn.innerHTML = `
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+      </svg>
+      <span class="text-xs">홈 디렉토리</span>`;
+    homeBtn.onclick = () => loadBrowsePath(homePath);
+    container.appendChild(homeBtn);
+  }
+
+  if (data.entries.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'text-sm text-gray-400 text-center py-6';
+    empty.textContent = '(비어 있음)';
+    container.appendChild(empty);
+  }
+
+  data.entries.forEach(entry => {
+    const btn = document.createElement('button');
+    if (entry.is_dir) {
+      btn.className = 'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-amber-50 text-sm text-gray-700 transition-colors';
+      btn.innerHTML = `
+        <svg class="w-4 h-4 text-amber-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/>
+        </svg>
+        <span class="truncate font-medium">${escHtml(entry.name)}</span>`;
+      btn.ondblclick = () => loadBrowsePath(entry.path);
+      btn.onclick = () => selectBrowserEntry(entry.path, entry.is_dir);
+    } else {
+      btn.className = 'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-gray-50 text-sm text-gray-400 cursor-default';
+      btn.innerHTML = `
+        <svg class="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        <span class="truncate">${escHtml(entry.name)}</span>`;
+    }
+    container.appendChild(btn);
+  });
+
+  document.getElementById('browser-selected-path').textContent = data.path;
+  currentBrowsePath = data.path;
+}
+
+function selectBrowserEntry(path, isDir) {
+  if (isDir) {
+    currentBrowsePath = path;
+    document.getElementById('browser-selected-path').textContent = path;
+    // Highlight selected
+    document.querySelectorAll('#browser-entries button').forEach(b => b.classList.remove('bg-blue-50', 'ring-1', 'ring-blue-300'));
+    event.currentTarget.classList.add('bg-blue-50', 'ring-1', 'ring-blue-300');
+  }
+}
+
+async function confirmDirSelection() {
+  selectedCwd = currentBrowsePath;
+  document.getElementById('cwd-display').textContent = selectedCwd;
+  closeDirBrowser();
+  await loadFileTree(selectedCwd);
+}
+
+// ── File tree ─────────────────────────────────────────────────────
+async function loadFileTree(path) {
+  try {
+    const res = await fetch('/api/fs/tree?path=' + encodeURIComponent(path) + '&max_depth=3');
+    const data = await res.json();
+    fileTree = data.tree;
+    allFiles = flattenTree(data.tree, '');
+
+    const sidebar = document.getElementById('tree-sidebar');
+    sidebar.classList.remove('hidden');
+    document.getElementById('tree-root-label').textContent = path.split('/').pop() || path;
+
+    const container = document.getElementById('file-tree');
+    container.innerHTML = '';
+    renderTreeNodes(data.tree, container, '');
+  } catch (e) {
+    console.warn('Tree load failed', e);
+  }
+}
+
+function flattenTree(nodes, prefix) {
+  let files = [];
+  for (const node of nodes) {
+    const rel = prefix ? prefix + '/' + node.name : node.name;
+    if (!node.is_dir) {
+      files.push({ name: node.name, relPath: rel, fullPath: node.path });
+    } else if (node.children) {
+      files = files.concat(flattenTree(node.children, rel));
+    }
+  }
+  return files;
+}
+
+function renderTreeNodes(nodes, container, indent) {
+  nodes.forEach(node => {
+    const item = document.createElement('div');
+    item.style.paddingLeft = (indent.length * 12) + 'px';
+
+    if (node.is_dir) {
+      item.className = 'tree-item flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer select-none';
+      item.innerHTML = `
+        <svg class="w-3 h-3 text-gray-400 flex-shrink-0 transition-transform" id="chevron-${btoa(node.path).replace(/=/g,'')}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+        <svg class="w-3.5 h-3.5 text-amber-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/>
+        </svg>
+        <span class="text-xs text-gray-700 truncate font-medium">${escHtml(node.name)}</span>`;
+      const childContainer = document.createElement('div');
+      childContainer.className = 'hidden';
+      if (node.children && node.children.length > 0) {
+        renderTreeNodes(node.children, childContainer, indent + ' ');
+      }
+      item.onclick = (e) => {
+        e.stopPropagation();
+        const isHidden = childContainer.classList.toggle('hidden');
+        const chevronId = 'chevron-' + btoa(node.path).replace(/=/g,'');
+        const chevron = document.getElementById(chevronId);
+        if (chevron) chevron.style.transform = isHidden ? '' : 'rotate(90deg)';
+      };
+      container.appendChild(item);
+      container.appendChild(childContainer);
+    } else {
+      item.className = 'tree-file flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer select-none';
+      item.innerHTML = `
+        <svg class="w-3.5 h-3.5 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        <span class="text-xs text-gray-600 truncate">${escHtml(node.name)}</span>`;
+      item.title = 'クリックして@メンション挿入';
+      item.onclick = () => insertMentionDirect(node.path);
+      container.appendChild(item);
+    }
+  });
+}
+
+function insertMentionDirect(filePath) {
+  const textarea = document.getElementById('prompt-input');
+  const val = textarea.value;
+  const cursor = textarea.selectionStart;
+  textarea.value = val.slice(0, cursor) + '@' + filePath + ' ' + val.slice(cursor);
+  textarea.selectionStart = textarea.selectionEnd = cursor + filePath.length + 2;
+  textarea.focus();
+}
+
+// ── @mention autocomplete ─────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const textarea = document.getElementById('prompt-input');
+  textarea.addEventListener('input', handlePromptInput);
+  textarea.addEventListener('keydown', handleMentionKeydown);
+  textarea.addEventListener('blur', () => {
+    setTimeout(hideMentionDropdown, 150);
+  });
+});
+
+function handlePromptInput() {
+  const textarea = document.getElementById('prompt-input');
+  const val = textarea.value;
+  const cursor = textarea.selectionStart;
+
+  // Walk back from cursor to find @
+  let i = cursor - 1;
+  while (i >= 0 && val[i] !== '@' && val[i] !== ' ' && val[i] !== '\n') i--;
+  if (i >= 0 && val[i] === '@') {
+    const query = val.slice(i + 1, cursor);
+    if (!query.includes('\n') && query.length <= 60) {
+      mentionAtPos = i;
+      showMentionDropdown(query);
+      return;
+    }
+  }
+  hideMentionDropdown();
+}
+
+function showMentionDropdown(query) {
+  if (allFiles.length === 0) { hideMentionDropdown(); return; }
+  const q = query.toLowerCase();
+  const matches = q
+    ? allFiles.filter(f => f.relPath.toLowerCase().includes(q)).slice(0, 8)
+    : allFiles.slice(0, 8);
+
+  if (matches.length === 0) { hideMentionDropdown(); return; }
+
+  const dropdown = document.getElementById('mention-dropdown');
+  mentionSelectedIdx = 0;
+  dropdown.innerHTML = matches.map((f, i) => `
+    <div class="mention-item flex items-center gap-2 px-3 py-2 cursor-pointer text-sm hover:bg-blue-50 ${i === 0 ? 'bg-blue-50' : ''}"
+         data-relpath="${escHtml(f.relPath)}" data-i="${i}">
+      <svg class="w-3.5 h-3.5 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+      </svg>
+      <span class="truncate text-gray-700">${escHtml(f.relPath)}</span>
+    </div>`).join('');
+
+  dropdown.querySelectorAll('.mention-item').forEach(el => {
+    el.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      insertMention(el.dataset.relpath);
+    });
+  });
+
+  dropdown.classList.remove('hidden');
+}
+
+function hideMentionDropdown() {
+  document.getElementById('mention-dropdown').classList.add('hidden');
+}
+
+function handleMentionKeydown(e) {
+  const dropdown = document.getElementById('mention-dropdown');
+  if (dropdown.classList.contains('hidden')) return;
+  const items = dropdown.querySelectorAll('.mention-item');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    mentionSelectedIdx = Math.min(mentionSelectedIdx + 1, items.length - 1);
+    updateMentionSelection(items);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    mentionSelectedIdx = Math.max(mentionSelectedIdx - 1, 0);
+    updateMentionSelection(items);
+  } else if (e.key === 'Enter' || e.key === 'Tab') {
+    if (items[mentionSelectedIdx]) {
+      e.preventDefault();
+      insertMention(items[mentionSelectedIdx].dataset.relpath);
+    }
+  } else if (e.key === 'Escape') {
+    hideMentionDropdown();
+  }
+}
+
+function updateMentionSelection(items) {
+  items.forEach((el, i) => {
+    el.classList.toggle('bg-blue-50', i === mentionSelectedIdx);
+  });
+}
+
+function insertMention(relPath) {
+  const textarea = document.getElementById('prompt-input');
+  const val = textarea.value;
+  const before = val.slice(0, mentionAtPos);
+  const after = val.slice(textarea.selectionStart);
+  textarea.value = before + '@' + relPath + ' ' + after;
+  textarea.selectionStart = textarea.selectionEnd = mentionAtPos + relPath.length + 2;
+  hideMentionDropdown();
+  textarea.focus();
+}
+
+// ── Run execution ─────────────────────────────────────────────────
 async function startRun() {
   const mode = document.getElementById('mode-input').value;
   const prompt = document.getElementById('prompt-input').value.trim();
-  if (!prompt) return;
-  const cwd = document.getElementById('cwd-input').value || '.';
+  if (!prompt) { document.getElementById('prompt-input').focus(); return; }
+  const cwd = selectedCwd;
 
-  document.getElementById('run-form').classList.add('hidden');
-  document.getElementById('run-output').classList.remove('hidden');
+  hideForm();
+  const outputEl = document.getElementById('run-output');
+  outputEl.classList.remove('hidden');
   document.getElementById('run-steps').innerHTML = '';
-  document.getElementById('run-status').textContent = '실행 중';
+  setRunStatus('running');
+  outputEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  const res = await fetch('/api/orchestrate/runs', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode, prompt, cwd })
-  });
-  const data = await res.json();
+  try {
+    const res = await fetch('/api/orchestrate/runs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode, prompt, cwd }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
 
-  const es = new EventSource(`/api/orchestrate/runs/${data.id}/stream`);
-  es.onmessage = e => {
-    const ev = JSON.parse(e.data);
-    if (ev.type === 'done') {
-      document.getElementById('run-status').textContent = '완료';
-      document.getElementById('run-status').className = 'text-xs px-2.5 py-1 rounded-full bg-green-50 text-green-700 border border-green-200 font-medium';
+    const es = new EventSource('/api/orchestrate/runs/' + data.id + '/stream');
+    es.onmessage = (e) => {
+      const ev = JSON.parse(e.data);
+      if (ev.type === 'done') {
+        setRunStatus('done');
+        es.close();
+        htmx.trigger('#runs-list', 'load');
+        return;
+      }
+      const el = buildStepElement(ev, mode);
+      if (el) document.getElementById('run-steps').appendChild(el);
+    };
+    es.onerror = () => {
+      setRunStatus('error');
       es.close();
-      return;
-    }
-    const agentColors = { claude: 'text-violet-600', codex: 'text-emerald-600', judge: 'text-blue-600' };
-    const color = agentColors[ev.agent] || 'text-gray-600';
-    const div = document.createElement('div');
-    if (ev.type === 'status') {
-      div.className = 'flex items-center gap-2 text-xs text-gray-400';
-      div.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0"></span>${ev.text}`;
-    } else {
-      div.className = 'border border-gray-100 rounded-lg p-4';
-      div.innerHTML = `<p class="text-xs font-medium ${color} mb-2">${ev.agent || ''} <span class="text-gray-400 font-normal">${ev.role || ''}</span></p><pre class="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">${ev.text || ''}</pre>`;
-    }
-    document.getElementById('run-steps').appendChild(div);
+    };
+  } catch (err) {
+    appendErrorStep('실행 실패: ' + err.message);
+    setRunStatus('error');
+  }
+}
+
+function setRunStatus(state) {
+  const el = document.getElementById('run-status');
+  const states = {
+    running: ['실행 중', 'bg-amber-50 text-amber-700 border-amber-200'],
+    done:    ['완료',    'bg-green-50 text-green-700 border-green-200'],
+    error:   ['오류',    'bg-red-50 text-red-700 border-red-200'],
   };
+  const [label, cls] = states[state] || states.running;
+  el.textContent = label;
+  el.className = 'text-xs px-2.5 py-1 rounded-full border font-medium ' + cls;
+}
+
+// ── Step element rendering ─────────────────────────────────────────
+const AGENT_THEMES = {
+  claude: {
+    wrapClass: 'agent-claude agent-card rounded-xl p-4',
+    badgeClass: 'agent-badge inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold',
+    label: 'Claude',
+    icon: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>',
+  },
+  codex: {
+    wrapClass: 'agent-codex agent-card rounded-xl p-4',
+    badgeClass: 'agent-badge inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold',
+    label: 'Codex',
+    icon: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>',
+  },
+  judge: {
+    wrapClass: 'agent-judge agent-card rounded-xl p-4',
+    badgeClass: 'agent-badge inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold',
+    label: 'Judge',
+    icon: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"/></svg>',
+  },
+};
+
+const ROLE_LABELS = {
+  implementer: '구현',
+  reviewer: '리뷰',
+  debater_a: '토론 A',
+  debater_b: '토론 B',
+  judge: '판정',
+};
+
+function buildStepElement(ev, mode) {
+  const div = document.createElement('div');
+
+  if (ev.type === 'status') {
+    div.className = 'flex items-center gap-2 text-xs text-gray-400 py-0.5';
+    div.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0"></span>' + escHtml(ev.text);
+    return div;
+  }
+
+  if (ev.type === 'error') {
+    div.className = 'agent-error agent-card rounded-xl p-4';
+    div.innerHTML = `
+      <div class="flex items-center gap-2 mb-2">
+        <span class="agent-badge inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold">
+          오류 ${ev.agent ? '— ' + escHtml(ev.agent) : ''}
+        </span>
+      </div>
+      <pre class="text-sm text-red-700 whitespace-pre-wrap font-sans leading-relaxed">${escHtml(ev.text || '')}</pre>`;
+    return div;
+  }
+
+  if (ev.type !== 'result') return null;
+
+  const theme = AGENT_THEMES[ev.agent] || AGENT_THEMES.claude;
+  const roleLabel = ROLE_LABELS[ev.role] || ev.role || '';
+  const text = ev.text || '';
+
+  let contentHtml;
+  if (ev.role === 'judge') {
+    contentHtml = renderJudgmentContent(text);
+  } else {
+    contentHtml = `<pre class="text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed">${escHtml(text)}</pre>`;
+  }
+
+  div.className = theme.wrapClass;
+  div.innerHTML = `
+    <div class="flex items-center justify-between mb-3">
+      <span class="${theme.badgeClass}">
+        ${theme.icon}
+        ${theme.label}
+        ${roleLabel ? '<span class="opacity-60 font-normal">· ' + escHtml(roleLabel) + '</span>' : ''}
+      </span>
+    </div>
+    ${contentHtml}`;
+
+  return div;
+}
+
+function renderJudgmentContent(text) {
+  let judgment = null;
+  try { judgment = JSON.parse(text); } catch (_) {}
+
+  if (!judgment || typeof judgment !== 'object') {
+    return `<pre class="text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed">${escHtml(text)}</pre>`;
+  }
+
+  const statusColors = {
+    converged: 'bg-green-100 text-green-700 border-green-200',
+    diverged:  'bg-red-100 text-red-700 border-red-200',
+    stalemate: 'bg-amber-100 text-amber-700 border-amber-200',
+  };
+  const statusCls = statusColors[judgment.status] || 'bg-gray-100 text-gray-700 border-gray-200';
+  const statusKo = { converged: '수렴', diverged: '발산', stalemate: '교착' };
+  const statusLabel = (statusKo[judgment.status] || judgment.status || '?') + (judgment.should_continue ? ' (계속)' : ' (종료)');
+
+  let html = `<div class="space-y-3">`;
+  html += `<div class="flex items-center gap-2">
+    <span class="inline-block px-2.5 py-1 rounded-full text-xs font-semibold border ${statusCls}">${escHtml(statusLabel)}</span>
+  </div>`;
+
+  if (judgment.synthesis) {
+    html += `<p class="text-sm text-gray-700 leading-relaxed">${escHtml(judgment.synthesis)}</p>`;
+  }
+
+  if (judgment.agreement_points?.length) {
+    html += `<div>
+      <p class="text-xs font-medium text-gray-500 mb-1.5">동의 사항</p>
+      <ul class="space-y-1">${judgment.agreement_points.map(p =>
+        `<li class="flex items-start gap-1.5 text-sm text-gray-700"><span class="text-green-500 mt-0.5 flex-shrink-0">✓</span>${escHtml(p)}</li>`
+      ).join('')}</ul></div>`;
+  }
+
+  if (judgment.disagreement_points?.length) {
+    html += `<div>
+      <p class="text-xs font-medium text-gray-500 mb-1.5">이견</p>
+      <ul class="space-y-1">${judgment.disagreement_points.map(p =>
+        `<li class="flex items-start gap-1.5 text-sm text-gray-700"><span class="text-red-400 mt-0.5 flex-shrink-0">✗</span>${escHtml(p)}</li>`
+      ).join('')}</ul></div>`;
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+function appendErrorStep(msg) {
+  const div = document.createElement('div');
+  div.className = 'agent-error agent-card rounded-xl p-4';
+  div.innerHTML = `<p class="text-sm text-red-700">${escHtml(msg)}</p>`;
+  document.getElementById('run-steps').appendChild(div);
+}
+
+// ── Utils ─────────────────────────────────────────────────────────
+function escHtml(str) {
+  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 </script>
+
 {% endblock %}

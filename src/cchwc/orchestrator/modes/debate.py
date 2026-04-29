@@ -133,14 +133,18 @@ class DebateMode(OrchestrationMode):
             return await run_codex_exec(prompt, cwd=cwd, json_mode=False, timeout_sec=timeout)
 
     def _parse_structured(self, text: str) -> dict | None:
-        try:
-            return json.loads(text)
-        except (json.JSONDecodeError, TypeError):
-            start = text.find("{")
-            end = text.rfind("}") + 1
-            if start >= 0 and end > start:
-                try:
-                    return json.loads(text[start:end])
-                except json.JSONDecodeError:
-                    pass
+        import re
+        candidates = []
+        for m in re.finditer(r"```(?:json)?\s*([\s\S]*?)```", text):
+            candidates.append(m.group(1).strip())
+        start = text.find("{")
+        end = text.rfind("}") + 1
+        if start >= 0 and end > start:
+            candidates.append(text[start:end])
+        candidates.append(text)
+        for c in candidates:
+            try:
+                return json.loads(c)
+            except (json.JSONDecodeError, TypeError):
+                pass
         return None
