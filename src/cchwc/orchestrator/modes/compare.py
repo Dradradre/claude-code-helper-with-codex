@@ -20,50 +20,42 @@ class CompareMode(OrchestrationMode):
     ) -> dict:
         timeout = config.get("timeout_per_step_sec", 600)
 
-        await emit(json.dumps({"type": "status", "text": "Starting Compare mode..."}))
+        await emit(json.dumps({"type": "status", "text": "Claude와 Codex에 동시 요청 중..."}))
 
-        claude_task = run_claude_p(prompt, cwd=cwd, timeout_sec=timeout)
-        codex_task = run_codex_exec(prompt, cwd=cwd, timeout_sec=timeout)
+        results: dict = {}
 
-        claude_result, codex_result = await asyncio.gather(
-            claude_task, codex_task, return_exceptions=True
-        )
+        async def _run(agent_name: str, coro_fn) -> None:
+            await emit(json.dumps({"type": "stream_start", "agent": agent_name, "role": "implementer"}))
 
-        results = {}
+            async def on_chunk(text: str) -> None:
+                await emit(json.dumps({"type": "chunk", "agent": agent_name, "text": text}))
 
-        if isinstance(claude_result, Exception):
-            await emit(json.dumps({"type": "error", "agent": "claude", "text": str(claude_result)}))
-            results["claude"] = {"error": str(claude_result)}
-        else:
-            await emit(json.dumps({
-                "type": "result", "agent": "claude", "role": "implementer",
-                "text": claude_result.stdout[:2000] if claude_result.stdout else "(no output)",
-            }))
-            results["claude"] = {
-                "stdout": claude_result.stdout,
-                "exit_code": claude_result.exit_code,
-                "duration": claude_result.duration_sec,
-                "input_tokens": claude_result.input_tokens,
-                "output_tokens": claude_result.output_tokens,
-                "error": claude_result.error,
+            try:
+                result = await coro_fn(on_chunk)
+            except Exception as e:
+                await emit(json.dumps({"type": "stream_end", "agent": agent_name, "error": str(e)}))
+                results[agent_name] = {"error": str(e)}
+                return
+
+            await emit(json.dumps({"type": "stream_end", "agent": agent_name}))
+            results[agent_name] = {
+                "stdout": result.stdout,
+                "exit_code": result.exit_code,
+                "duration": result.duration_sec,
+                "input_tokens": result.input_tokens,
+                "output_tokens": result.output_tokens,
+                "error": result.error,
             }
 
-        if isinstance(codex_result, Exception):
-            await emit(json.dumps({"type": "error", "agent": "codex", "text": str(codex_result)}))
-            results["codex"] = {"error": str(codex_result)}
-        else:
-            await emit(json.dumps({
-                "type": "result", "agent": "codex", "role": "implementer",
-                "text": codex_result.stdout[:2000] if codex_result.stdout else "(no output)",
-            }))
-            results["codex"] = {
-                "stdout": codex_result.stdout,
-                "exit_code": codex_result.exit_code,
-                "duration": codex_result.duration_sec,
-                "input_tokens": codex_result.input_tokens,
-                "output_tokens": codex_result.output_tokens,
-                "error": codex_result.error,
-            }
+        async with asyncio.TaskGroup() as tg:
+            tg.create_task(_run(
+                "claude",
+                lambda cb: run_claude_p(prompt, cwd=cwd, timeout_sec=timeout, on_chunk=cb),
+            ))
+            tg.create_task(_run(
+                "codex",
+                lambda cb: run_codex_exec(prompt, cwd=cwd, timeout_sec=timeout, on_chunk=cb),
+            ))
 
         total_tokens = sum(
             r.get("input_tokens", 0) + r.get("output_tokens", 0)

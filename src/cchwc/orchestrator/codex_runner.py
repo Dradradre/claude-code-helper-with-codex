@@ -1,5 +1,6 @@
 import json
 import shutil
+from collections.abc import Awaitable, Callable
 
 from cchwc.orchestrator.runner import AgentResult, run_agent
 
@@ -13,10 +14,11 @@ async def run_codex_exec(
     cwd: str = ".",
     json_mode: bool = False,
     timeout_sec: int = 600,
+    on_chunk: Callable[[str], Awaitable[None]] | None = None,
 ) -> AgentResult:
     cmd = ["codex", "exec", prompt]
 
-    result = await run_agent(cmd, cwd=cwd, timeout_sec=timeout_sec)
+    result = await run_agent(cmd, cwd=cwd, timeout_sec=timeout_sec, on_chunk=on_chunk)
 
     if result.error:
         return result

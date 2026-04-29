@@ -41,26 +41,16 @@ class DebateMode(OrchestrationMode):
             await emit(json.dumps({"type": "status", "text": f"Round {round_num}/{max_rounds}"}))
 
             a_prompt = self._build_prompt(prompt, round_num, a_position, b_position, is_first=round_num == 1)
-            await emit(json.dumps({"type": "status", "text": f"Debater A ({debater_a}) arguing..."}))
-            a_result = await self._run_agent(debater_a, a_prompt, cwd, timeout)
+            await emit(json.dumps({"type": "status", "text": f"Debater A ({debater_a}) 논거 작성 중..."}))
+            a_result = await self._run_streaming(debater_a, a_prompt, cwd, timeout, "debater_a", emit)
             total_tokens += a_result.input_tokens + a_result.output_tokens
             a_response = a_result.stdout or ""
 
-            await emit(json.dumps({
-                "type": "result", "agent": debater_a, "role": "debater_a",
-                "text": a_response[:2000],
-            }))
-
             b_prompt = self._build_prompt(prompt, round_num, b_position, a_response, is_first=round_num == 1)
-            await emit(json.dumps({"type": "status", "text": f"Debater B ({debater_b}) arguing..."}))
-            b_result = await self._run_agent(debater_b, b_prompt, cwd, timeout)
+            await emit(json.dumps({"type": "status", "text": f"Debater B ({debater_b}) 논거 작성 중..."}))
+            b_result = await self._run_streaming(debater_b, b_prompt, cwd, timeout, "debater_b", emit)
             total_tokens += b_result.input_tokens + b_result.output_tokens
             b_response = b_result.stdout or ""
-
-            await emit(json.dumps({
-                "type": "result", "agent": debater_b, "role": "debater_b",
-                "text": b_response[:2000],
-            }))
 
             a_parsed = self._parse_structured(a_response)
             b_parsed = self._parse_structured(b_response)
@@ -86,18 +76,20 @@ class DebateMode(OrchestrationMode):
 
             if round_num >= convergence_after:
                 await emit(json.dumps({"type": "status", "text": "Judge evaluating..."}))
+                judge_agent = config.get("judge", "claude")
+                await emit(json.dumps({"type": "stream_start", "agent": judge_agent, "role": "judge"}))
                 judgment = await judge_round(
                     topic=prompt,
                     a_response=a_response,
                     b_response=b_response,
                     cwd=cwd,
-                    judge_agent=config.get("judge", "claude"),
+                    judge_agent=judge_agent,
                     timeout_sec=timeout,
                 )
                 total_tokens += judgment.get("tokens", 0)
-
+                await emit(json.dumps({"type": "stream_end", "agent": judge_agent}))
                 await emit(json.dumps({
-                    "type": "result", "agent": config.get("judge", "claude"), "role": "judge",
+                    "type": "result", "agent": judge_agent, "role": "judge",
                     "text": json.dumps(judgment.get("result", {}), indent=2, ensure_ascii=False),
                 }))
 
@@ -126,11 +118,27 @@ class DebateMode(OrchestrationMode):
             f"Respond with this JSON structure:\n{DEBATER_SCHEMA}"
         )
 
-    async def _run_agent(self, agent: str, prompt: str, cwd: str, timeout: int):
+    async def _run_streaming(
+        self,
+        agent: str,
+        prompt: str,
+        cwd: str,
+        timeout: int,
+        role: str,
+        emit,
+    ):
+        await emit(json.dumps({"type": "stream_start", "agent": agent, "role": role}))
+
+        async def on_chunk(text: str) -> None:
+            await emit(json.dumps({"type": "chunk", "agent": agent, "text": text}))
+
         if agent == "claude":
-            return await run_claude_p(prompt, cwd=cwd, output_format="text", timeout_sec=timeout)
+            result = await run_claude_p(prompt, cwd=cwd, output_format="text", timeout_sec=timeout, on_chunk=on_chunk)
         else:
-            return await run_codex_exec(prompt, cwd=cwd, json_mode=False, timeout_sec=timeout)
+            result = await run_codex_exec(prompt, cwd=cwd, json_mode=False, timeout_sec=timeout, on_chunk=on_chunk)
+
+        await emit(json.dumps({"type": "stream_end", "agent": agent}))
+        return result
 
     def _parse_structured(self, text: str) -> dict | None:
         import re

@@ -23,14 +23,9 @@ class ReviewMode(OrchestrationMode):
         timeout = config.get("timeout_per_step_sec", 600)
         total_tokens = 0
 
-        await emit(json.dumps({"type": "status", "text": f"Implementation by {implementer}..."}))
-        impl_result = await self._run_agent(implementer, prompt, cwd, timeout)
+        await emit(json.dumps({"type": "status", "text": f"{implementer} 구현 중..."}))
+        impl_result = await self._run_streaming(implementer, prompt, cwd, timeout, "implementer", emit)
         total_tokens += impl_result.input_tokens + impl_result.output_tokens
-
-        await emit(json.dumps({
-            "type": "result", "agent": implementer, "role": "implementer",
-            "text": impl_result.stdout[:2000] if impl_result.stdout else "(no output)",
-        }))
 
         if impl_result.error:
             return {
@@ -50,14 +45,9 @@ class ReviewMode(OrchestrationMode):
                 f'"issues": [...], "suggestions": [...]}}'
             )
 
-            await emit(json.dumps({"type": "status", "text": f"Review round {round_num + 1} by {reviewer}..."}))
-            review_result = await self._run_agent(reviewer, review_prompt, cwd, timeout)
+            await emit(json.dumps({"type": "status", "text": f"{reviewer} 리뷰 중 (round {round_num + 1})..."}))
+            review_result = await self._run_streaming(reviewer, review_prompt, cwd, timeout, "reviewer", emit)
             total_tokens += review_result.input_tokens + review_result.output_tokens
-
-            await emit(json.dumps({
-                "type": "result", "agent": reviewer, "role": "reviewer",
-                "text": review_result.stdout[:2000] if review_result.stdout else "(no output)",
-            }))
 
             if review_result.error:
                 break
@@ -65,7 +55,7 @@ class ReviewMode(OrchestrationMode):
             verdict = self._parse_verdict(review_result.stdout)
 
             if verdict == "approve":
-                await emit(json.dumps({"type": "status", "text": "Approved!"}))
+                await emit(json.dumps({"type": "status", "text": "승인됨!"}))
                 break
 
             if round_num < max_rounds - 1:
@@ -77,15 +67,10 @@ class ReviewMode(OrchestrationMode):
                     f"Provide the fixed implementation."
                 )
 
-                await emit(json.dumps({"type": "status", "text": f"Revision by {implementer}..."}))
-                fix_result = await self._run_agent(implementer, fix_prompt, cwd, timeout)
+                await emit(json.dumps({"type": "status", "text": f"{implementer} 수정 중..."}))
+                fix_result = await self._run_streaming(implementer, fix_prompt, cwd, timeout, "implementer", emit)
                 total_tokens += fix_result.input_tokens + fix_result.output_tokens
                 current_impl = fix_result.stdout
-
-                await emit(json.dumps({
-                    "type": "result", "agent": implementer, "role": "implementer",
-                    "text": fix_result.stdout[:2000] if fix_result.stdout else "(no output)",
-                }))
 
         return {
             "summary": "Review completed",
@@ -93,17 +78,35 @@ class ReviewMode(OrchestrationMode):
             "total_cost_usd": 0.0,
         }
 
-    async def _run_agent(self, agent: str, prompt: str, cwd: str, timeout: int):
+    async def _run_streaming(
+        self,
+        agent: str,
+        prompt: str,
+        cwd: str,
+        timeout: int,
+        role: str,
+        emit: Callable[[str], Awaitable[None]],
+    ):
+        await emit(json.dumps({"type": "stream_start", "agent": agent, "role": role}))
+
+        async def on_chunk(text: str) -> None:
+            await emit(json.dumps({"type": "chunk", "agent": agent, "text": text}))
+
         if agent == "claude":
-            return await run_claude_p(prompt, cwd=cwd, output_format="text", timeout_sec=timeout)
+            result = await run_claude_p(prompt, cwd=cwd, timeout_sec=timeout, on_chunk=on_chunk)
         else:
-            return await run_codex_exec(prompt, cwd=cwd, json_mode=False, timeout_sec=timeout)
+            result = await run_codex_exec(prompt, cwd=cwd, timeout_sec=timeout, on_chunk=on_chunk)
+
+        await emit(json.dumps({"type": "stream_end", "agent": agent}))
+        return result
 
     def _parse_verdict(self, output: str) -> str:
-        try:
-            data = json.loads(output)
-            return data.get("verdict", "request_changes")
-        except (json.JSONDecodeError, TypeError):
-            if "approve" in output.lower():
-                return "approve"
-            return "request_changes"
+        for candidate in [output]:
+            try:
+                data = json.loads(candidate)
+                return data.get("verdict", "request_changes")
+            except (json.JSONDecodeError, TypeError):
+                pass
+        if "approve" in output.lower():
+            return "approve"
+        return "request_changes"

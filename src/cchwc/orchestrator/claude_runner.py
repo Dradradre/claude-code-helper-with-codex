@@ -1,5 +1,6 @@
 import json
 import shutil
+from collections.abc import Awaitable, Callable
 
 from cchwc.orchestrator.runner import AgentResult, run_agent
 
@@ -15,6 +16,7 @@ async def run_claude_p(
     allowed_tools: list[str] | None = None,
     max_turns: int | None = None,
     timeout_sec: int = 600,
+    on_chunk: Callable[[str], Awaitable[None]] | None = None,
 ) -> AgentResult:
     cmd = ["claude", "-p", prompt, "--output-format", output_format]
     if allowed_tools:
@@ -23,7 +25,7 @@ async def run_claude_p(
     if max_turns:
         cmd.extend(["--max-turns", str(max_turns)])
 
-    result = await run_agent(cmd, cwd=cwd, timeout_sec=timeout_sec)
+    result = await run_agent(cmd, cwd=cwd, timeout_sec=timeout_sec, on_chunk=on_chunk)
 
     if result.error:
         return result

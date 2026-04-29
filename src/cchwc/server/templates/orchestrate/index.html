@@ -563,6 +563,10 @@ function insertMention(relPath) {
   textarea.focus();
 }
 
+// ── Streaming state ───────────────────────────────────────────────
+// agent → { card: HTMLElement, pre: HTMLElement }
+const streamCards = new Map();
+
 // ── Run execution ─────────────────────────────────────────────────
 async function startRun() {
   const mode = document.getElementById('mode-input').value;
@@ -571,6 +575,7 @@ async function startRun() {
   const cwd = selectedCwd;
 
   hideForm();
+  streamCards.clear();
   const outputEl = document.getElementById('run-output');
   outputEl.classList.remove('hidden');
   document.getElementById('run-steps').innerHTML = '';
@@ -589,14 +594,7 @@ async function startRun() {
     const es = new EventSource('/api/orchestrate/runs/' + data.id + '/stream');
     es.onmessage = (e) => {
       const ev = JSON.parse(e.data);
-      if (ev.type === 'done') {
-        setRunStatus('done');
-        es.close();
-        htmx.trigger('#runs-list', 'load');
-        return;
-      }
-      const el = buildStepElement(ev, mode);
-      if (el) document.getElementById('run-steps').appendChild(el);
+      handleStreamEvent(ev, mode);
     };
     es.onerror = () => {
       setRunStatus('error');
@@ -605,6 +603,75 @@ async function startRun() {
   } catch (err) {
     appendErrorStep('실행 실패: ' + err.message);
     setRunStatus('error');
+  }
+}
+
+function handleStreamEvent(ev, mode) {
+  const steps = document.getElementById('run-steps');
+
+  if (ev.type === 'done') {
+    // Finalize any lingering streaming cards
+    streamCards.forEach(sc => finalizeStreamCard(sc));
+    streamCards.clear();
+    setRunStatus('done');
+    if (typeof htmx !== 'undefined') htmx.trigger('#runs-list', 'load');
+    return;
+  }
+
+  if (ev.type === 'status') {
+    const div = document.createElement('div');
+    div.className = 'flex items-center gap-2 text-xs text-gray-400 py-0.5';
+    div.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0 animate-pulse"></span>' + escHtml(ev.text);
+    steps.appendChild(div);
+    return;
+  }
+
+  if (ev.type === 'stream_start') {
+    const sc = createStreamCard(ev.agent, ev.role);
+    steps.appendChild(sc.card);
+    streamCards.set(ev.agent, sc);
+    return;
+  }
+
+  if (ev.type === 'chunk') {
+    const sc = streamCards.get(ev.agent);
+    if (sc) {
+      sc.pre.textContent += ev.text;
+      // Auto-scroll
+      sc.card.scrollIntoView({ block: 'nearest' });
+    }
+    return;
+  }
+
+  if (ev.type === 'stream_end') {
+    const sc = streamCards.get(ev.agent);
+    if (sc) {
+      finalizeStreamCard(sc);
+      if (!ev.keepCard) streamCards.delete(ev.agent);
+    }
+    return;
+  }
+
+  if (ev.type === 'result') {
+    // Judge structured result: replace content of existing card, or create new card
+    const sc = streamCards.get(ev.agent);
+    if (sc && ev.role === 'judge') {
+      // Replace streaming pre with structured judgment HTML
+      sc.pre.remove();
+      const judgeEl = document.createElement('div');
+      judgeEl.innerHTML = renderJudgmentContent(ev.text || '');
+      sc.card.appendChild(judgeEl);
+      streamCards.delete(ev.agent);
+    } else {
+      // Fallback: create a new result card (shouldn't normally happen)
+      const el = buildStepElement(ev, mode);
+      if (el) steps.appendChild(el);
+    }
+    return;
+  }
+
+  if (ev.type === 'error') {
+    appendErrorStep((ev.agent ? ev.agent + ': ' : '') + (ev.text || ''));
   }
 }
 
@@ -618,6 +685,42 @@ function setRunStatus(state) {
   const [label, cls] = states[state] || states.running;
   el.textContent = label;
   el.className = 'text-xs px-2.5 py-1 rounded-full border font-medium ' + cls;
+}
+
+// ── Streaming card helpers ─────────────────────────────────────────
+function createStreamCard(agentName, role) {
+  const theme = AGENT_THEMES[agentName] || AGENT_THEMES.claude;
+  const roleLabel = ROLE_LABELS[role] || role || '';
+
+  const card = document.createElement('div');
+  card.className = theme.wrapClass;
+
+  const header = document.createElement('div');
+  header.className = 'flex items-center justify-between mb-3';
+  header.innerHTML = `
+    <span class="${theme.badgeClass}">
+      ${theme.icon}
+      ${theme.label}
+      ${roleLabel ? '<span class="opacity-60 font-normal">· ' + escHtml(roleLabel) + '</span>' : ''}
+    </span>
+    <span class="stream-spinner text-xs text-gray-400 flex items-center gap-1">
+      <span class="inline-block w-1.5 h-1.5 rounded-full bg-current animate-bounce"></span>
+      <span class="inline-block w-1.5 h-1.5 rounded-full bg-current animate-bounce" style="animation-delay:.15s"></span>
+      <span class="inline-block w-1.5 h-1.5 rounded-full bg-current animate-bounce" style="animation-delay:.3s"></span>
+    </span>`;
+  card.appendChild(header);
+
+  const pre = document.createElement('pre');
+  pre.className = 'text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed';
+  pre.textContent = '';
+  card.appendChild(pre);
+
+  return { card, pre, header };
+}
+
+function finalizeStreamCard(sc) {
+  const spinner = sc.header?.querySelector('.stream-spinner');
+  if (spinner) spinner.remove();
 }
 
 // ── Step element rendering ─────────────────────────────────────────
