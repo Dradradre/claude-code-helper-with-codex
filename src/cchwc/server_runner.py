@@ -78,6 +78,8 @@ async def serve_all(open_browser: bool = False, host: str | None = None, port: i
     finally:
         watcher_task.cancel()
         watcher.stop()
+        from cchwc.core.db import dispose_engine
+        await dispose_engine(settings)
 
 
 def _make_adapters(settings):
