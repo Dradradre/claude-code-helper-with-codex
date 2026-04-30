@@ -1,11 +1,13 @@
 from collections import defaultdict
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cchwc.core.models import Message, OrchestrationStep, Project, Session
+from cchwc.core.models import Message, OrchestrationRun, OrchestrationStep, Project, Session
 from cchwc.server.deps import get_db
+from cchwc.server.usage_status import get_cli_limit_status
 
 router = APIRouter()
 
@@ -200,3 +202,115 @@ async def token_summary(db: AsyncSession = Depends(get_db)):
         "total_cache_creation_tokens": session_row.total_cache_creation or 0,
         "total_sessions": session_row.total_sessions,
     }
+
+
+@router.get("/live")
+async def live_usage(refresh_status: bool = False, db: AsyncSession = Depends(get_db)):
+    today = date.today().isoformat()
+    agents = {
+        "claude": _empty_live_agent(),
+        "codex": _empty_live_agent(),
+    }
+
+    session_rows = (
+        await db.execute(
+            select(
+                Session.agent_type,
+                func.sum(Session.total_input_tokens).label("input_tokens"),
+                func.sum(Session.total_output_tokens).label("output_tokens"),
+                func.sum(Session.total_cache_read_tokens).label("cache_read_tokens"),
+                func.sum(Session.total_cache_creation_tokens).label("cache_creation_tokens"),
+                func.count(Session.id).label("session_count"),
+                func.max(Session.last_message_at).label("last_activity_at"),
+            )
+            .where(Session.agent_type.in_(agents.keys()))
+            .where(func.date(Session.last_message_at) == today)
+            .group_by(Session.agent_type)
+        )
+    ).all()
+
+    orch_rows = (
+        await db.execute(
+            select(
+                OrchestrationStep.agent_type,
+                func.sum(OrchestrationStep.input_tokens).label("input_tokens"),
+                func.sum(OrchestrationStep.output_tokens).label("output_tokens"),
+                func.sum(OrchestrationStep.cost_usd).label("cost_usd"),
+                func.count(OrchestrationStep.id).label("step_count"),
+                func.max(OrchestrationStep.finished_at).label("last_activity_at"),
+            )
+            .where(OrchestrationStep.agent_type.in_(agents.keys()))
+            .where(func.date(OrchestrationStep.started_at) == today)
+            .group_by(OrchestrationStep.agent_type)
+        )
+    ).all()
+
+    running_runs = (
+        await db.execute(
+            select(func.count(OrchestrationRun.id)).where(OrchestrationRun.status == "running")
+        )
+    ).scalar() or 0
+
+    for row in session_rows:
+        usage = agents[row.agent_type]
+        usage["input_tokens"] += row.input_tokens or 0
+        usage["output_tokens"] += row.output_tokens or 0
+        usage["cache_read_tokens"] += row.cache_read_tokens or 0
+        usage["cache_creation_tokens"] += row.cache_creation_tokens or 0
+        usage["session_count"] += row.session_count or 0
+        usage["last_activity_at"] = _latest_iso(usage["last_activity_at"], row.last_activity_at)
+
+    for row in orch_rows:
+        usage = agents[row.agent_type]
+        usage["input_tokens"] += row.input_tokens or 0
+        usage["output_tokens"] += row.output_tokens or 0
+        usage["cost_usd"] += row.cost_usd or 0.0
+        usage["orchestration_step_count"] += row.step_count or 0
+        usage["last_activity_at"] = _latest_iso(usage["last_activity_at"], row.last_activity_at)
+
+    total_tokens = 0
+    for usage in agents.values():
+        usage["total_tokens"] = (
+            usage["input_tokens"]
+            + usage["output_tokens"]
+            + usage["cache_read_tokens"]
+            + usage["cache_creation_tokens"]
+        )
+        total_tokens += usage["total_tokens"]
+
+    return {
+        "as_of": datetime.now().isoformat(),
+        "date": today,
+        "running_orchestrations": running_runs,
+        "total_tokens": total_tokens,
+        "agents": agents,
+        "limits": await get_cli_limit_status(force_refresh=refresh_status),
+    }
+
+
+@router.get("/status")
+async def cli_limit_status(refresh: bool = False):
+    return await get_cli_limit_status(force_refresh=refresh)
+
+
+def _empty_live_agent() -> dict:
+    return {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_creation_tokens": 0,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "session_count": 0,
+        "orchestration_step_count": 0,
+        "last_activity_at": None,
+    }
+
+
+def _latest_iso(current: str | None, candidate: datetime | None) -> str | None:
+    if candidate is None:
+        return current
+    candidate_iso = candidate.isoformat()
+    if current is None or candidate_iso > current:
+        return candidate_iso
+    return current

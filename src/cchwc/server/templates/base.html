@@ -37,6 +37,34 @@
         <a href="/orchestrate" class="px-3 py-1.5 rounded-md text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">Orchestrate</a>
         <a href="/settings"   class="px-3 py-1.5 rounded-md text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors">Settings</a>
         <a href="/docs" target="_blank" class="px-3 py-1.5 rounded-md text-sm text-gray-400 hover:bg-gray-100 hover:text-gray-900 transition-colors">API</a>
+        <div id="global-usage" class="relative ml-2">
+          <button type="button" onclick="toggleUsagePanel()"
+            class="h-8 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:bg-gray-50">
+            <span id="usage-live-dot" class="w-1.5 h-1.5 rounded-full bg-gray-300"></span>
+            <span id="usage-button-label">Limits</span>
+          </button>
+          <div id="usage-panel"
+            class="hidden absolute right-0 mt-2 w-96 rounded-xl border border-gray-200 bg-white shadow-lg overflow-hidden">
+            <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <p class="text-xs font-semibold text-gray-800">CLI Limits</p>
+                <p id="usage-as-of" class="text-[11px] text-gray-400 mt-0.5">Loading...</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <span id="usage-running"
+                  class="hidden text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200"></span>
+                <button type="button" onclick="refreshGlobalUsage(true)"
+                  class="h-7 rounded-md border border-gray-200 px-2 text-[11px] text-gray-600 hover:bg-gray-50">
+                  Refresh
+                </button>
+              </div>
+            </div>
+            <div class="p-3 space-y-2">
+              <div id="usage-claude"></div>
+              <div id="usage-codex"></div>
+            </div>
+          </div>
+        </div>
       </nav>
     </div>
   </header>
@@ -44,6 +72,225 @@
   <main class="max-w-6xl mx-auto px-6 py-8">
     {% block content %}{% endblock %}
   </main>
+
+  <script>
+  const usageState = { timer: null, open: false, refreshInFlight: false };
+
+  document.addEventListener('DOMContentLoaded', () => {
+    refreshGlobalUsage();
+    usageState.timer = setInterval(refreshGlobalUsage, 30000);
+    document.addEventListener('click', (event) => {
+      const root = document.getElementById('global-usage');
+      if (root && !root.contains(event.target)) closeUsagePanel();
+    });
+  });
+
+  function toggleUsagePanel() {
+    const panel = document.getElementById('usage-panel');
+    if (!panel) return;
+    const willOpen = panel.classList.contains('hidden');
+    panel.classList.toggle('hidden', !willOpen);
+    usageState.open = willOpen;
+    if (willOpen) refreshGlobalUsage();
+  }
+
+  function closeUsagePanel() {
+    const panel = document.getElementById('usage-panel');
+    if (panel) panel.classList.add('hidden');
+    usageState.open = false;
+  }
+
+  async function refreshGlobalUsage(forceStatus = false) {
+    if (usageState.refreshInFlight) return;
+    usageState.refreshInFlight = true;
+    try {
+      const suffix = forceStatus ? '?refresh_status=1' : '';
+      const res = await fetch('/api/tokens/live' + suffix, { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      renderGlobalUsage(await res.json());
+    } catch (_) {
+      const label = document.getElementById('usage-button-label');
+      const dot = document.getElementById('usage-live-dot');
+      if (label) label.textContent = 'Limits unavailable';
+      if (dot) dot.className = 'w-1.5 h-1.5 rounded-full bg-red-400';
+    } finally {
+      usageState.refreshInFlight = false;
+    }
+  }
+
+  function renderGlobalUsage(data) {
+    const limits = data.limits || {};
+    const label = document.getElementById('usage-button-label');
+    const dot = document.getElementById('usage-live-dot');
+    const asOf = document.getElementById('usage-as-of');
+    const running = Number(data.running_orchestrations || 0);
+    const runningEl = document.getElementById('usage-running');
+
+    if (label) label.textContent = buildLimitButtonLabel(limits);
+    if (dot) {
+      const severity = getLimitSeverity(limits);
+      const color = severity === 'danger' ? 'bg-red-400' : severity === 'warn' ? 'bg-amber-400' : 'bg-green-400';
+      dot.className = `w-1.5 h-1.5 rounded-full ${color}${running > 0 ? ' animate-pulse' : ''}`;
+    }
+    if (asOf) asOf.textContent = `Updated ${formatUsageTime(limits.as_of || data.as_of)}`;
+    if (runningEl) {
+      runningEl.classList.toggle('hidden', running === 0);
+      runningEl.textContent = `${running} running`;
+    }
+
+    renderLimitAgent('usage-claude', 'Claude', limits.claude || {}, data.agents?.claude || {}, 'badge-claude');
+    renderLimitAgent('usage-codex', 'Codex', limits.codex || {}, data.agents?.codex || {}, 'badge-codex');
+  }
+
+  function renderLimitAgent(id, label, limit, usage, badgeClass) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const limitHtml = label === 'Codex'
+      ? renderCodexLimit(limit)
+      : renderClaudeLimit(limit);
+    const usageHtml = renderTodayUsage(usage);
+
+    el.innerHTML = `
+      <div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5">
+        <div class="flex items-center justify-between gap-3">
+          <span class="${badgeClass} px-2 py-0.5 rounded-full text-xs font-semibold">${escapeUsageHtml(label)}</span>
+          <span class="text-[11px] text-gray-400">${escapeUsageHtml(limit.updated_at ? formatUsageTime(limit.updated_at) : '-')}</span>
+        </div>
+        <div class="mt-2">${limitHtml}</div>
+        ${usageHtml}
+      </div>`;
+  }
+
+  function renderCodexLimit(limit) {
+    if (!limit.available) return renderUnavailableLimit(limit);
+    const windows = [limit.primary, limit.secondary].filter(Boolean);
+    const bars = windows.length
+      ? windows.map(renderLimitBar).join('')
+      : '<p class="text-xs text-gray-500">No window data</p>';
+    const plan = limit.plan_type ? `<span>${escapeUsageHtml(limit.plan_type)}</span>` : '';
+    const stale = limit.stale ? '<span class="text-amber-600">stale</span>' : '';
+    const meta = [plan, stale].filter(Boolean).join(' · ');
+    return `
+      <div class="space-y-2">${bars}</div>
+      ${meta ? `<div class="mt-2 text-[11px] text-gray-400">${meta}</div>` : ''}`;
+  }
+
+  function renderClaudeLimit(limit) {
+    if (!limit.available) return renderUnavailableLimit(limit);
+    const auth = limit.auth || {};
+    const plan = auth.subscription_type ? `${escapeUsageHtml(auth.subscription_type)} plan` : '';
+    const reset = limit.resets_at ? `reset ${escapeUsageHtml(formatUsageTime(limit.resets_at))}` : '';
+    const overage = limit.is_using_overage ? 'overage on' : '';
+    const statusParts = [limit.status, limit.rate_limit_type, reset, overage].filter(Boolean).map(escapeUsageHtml);
+    const meta = [plan, limit.overage_status ? `overage ${escapeUsageHtml(limit.overage_status)}` : ''].filter(Boolean).join(' · ');
+    return `
+      <div class="rounded-md border border-gray-200 bg-white px-2.5 py-2">
+        <div class="flex items-center justify-between gap-3">
+          <span class="text-sm font-semibold text-gray-800">${statusParts.join(' · ') || 'status available'}</span>
+        </div>
+        ${meta ? `<div class="mt-1 text-[11px] text-gray-400">${meta}</div>` : ''}
+      </div>`;
+  }
+
+  function renderLimitBar(windowInfo) {
+    const used = clampPercent(Number(windowInfo.used_percent || 0));
+    const remaining = windowInfo.remaining_percent == null ? null : clampPercent(Number(windowInfo.remaining_percent));
+    const remainingLabel = remaining == null ? '-' : `${Math.round(remaining)}% left`;
+    const reset = windowInfo.resets_at ? `reset ${formatUsageTime(windowInfo.resets_at)}` : '';
+    const barColor = remaining != null && remaining <= 15
+      ? 'bg-red-400'
+      : remaining != null && remaining <= 30 ? 'bg-amber-400' : 'bg-emerald-400';
+    return `
+      <div>
+        <div class="mb-1 flex items-center justify-between gap-3 text-[11px]">
+          <span class="font-semibold text-gray-600">${escapeUsageHtml(windowInfo.label || windowInfo.name || 'limit')}</span>
+          <span class="text-gray-400">${escapeUsageHtml([remainingLabel, reset].filter(Boolean).join(' · '))}</span>
+        </div>
+        <div class="h-1.5 overflow-hidden rounded-full bg-gray-200">
+          <div class="h-full rounded-full ${barColor}" style="width: ${used}%"></div>
+        </div>
+      </div>`;
+  }
+
+  function renderUnavailableLimit(limit) {
+    const message = limit.error || 'No CLI status yet';
+    return `
+      <div class="rounded-md border border-gray-200 bg-white px-2.5 py-2">
+        <p class="truncate text-xs text-gray-500" title="${escapeUsageHtml(message)}">${escapeUsageHtml(message)}</p>
+      </div>`;
+  }
+
+  function renderTodayUsage(usage) {
+    const input = Number(usage.input_tokens || 0);
+    const output = Number(usage.output_tokens || 0);
+    const cache = Number(usage.cache_read_tokens || 0) + Number(usage.cache_creation_tokens || 0);
+    const total = Number(usage.total_tokens || input + output + cache);
+    const sessions = Number(usage.session_count || 0);
+    const steps = Number(usage.orchestration_step_count || 0);
+    const last = usage.last_activity_at ? formatUsageTime(usage.last_activity_at) : '-';
+    return `
+      <div class="mt-2 border-t border-gray-200 pt-2">
+        <div class="flex items-center justify-between text-[11px] text-gray-500">
+          <span>Today ${compactNumber(total)}</span>
+          <span>${sessions} sessions · ${steps} steps · ${escapeUsageHtml(last)}</span>
+        </div>
+        <div class="mt-1 grid grid-cols-3 gap-2 text-[11px] text-gray-400">
+          <span>in ${compactNumber(input)}</span>
+          <span>out ${compactNumber(output)}</span>
+          <span>cache ${compactNumber(cache)}</span>
+        </div>
+      </div>`;
+  }
+
+  function buildLimitButtonLabel(limits) {
+    const remaining = worstRemainingPercent(limits);
+    if (remaining != null) return `Limits ${Math.round(remaining)}% left`;
+    const claudeStatus = limits?.claude?.status;
+    if (claudeStatus) return `Limits ${claudeStatus}`;
+    return 'Limits';
+  }
+
+  function worstRemainingPercent(limits) {
+    const values = [];
+    [limits?.codex?.primary, limits?.codex?.secondary].forEach((windowInfo) => {
+      const value = windowInfo && windowInfo.remaining_percent != null ? Number(windowInfo.remaining_percent) : null;
+      if (Number.isFinite(value)) values.push(value);
+    });
+    return values.length ? Math.min(...values) : null;
+  }
+
+  function getLimitSeverity(limits) {
+    const remaining = worstRemainingPercent(limits);
+    const codexReached = Boolean(limits?.codex?.rate_limit_reached_type);
+    const claudeBlocked = limits?.claude?.status && !['allowed', 'ok'].includes(String(limits.claude.status).toLowerCase());
+    if (codexReached || claudeBlocked || (remaining != null && remaining <= 10)) return 'danger';
+    if (limits?.codex?.stale || (remaining != null && remaining <= 25)) return 'warn';
+    return 'ok';
+  }
+
+  function clampPercent(value) {
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Math.min(100, value));
+  }
+
+  function compactNumber(value) {
+    const num = Number(value || 0);
+    if (num >= 1000000) return (num / 1000000).toFixed(num >= 10000000 ? 0 : 1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(num >= 10000 ? 0 : 1) + 'K';
+    return String(Math.round(num));
+  }
+
+  function formatUsageTime(value) {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function escapeUsageHtml(value) {
+    return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  </script>
 
 </body>
 </html>
