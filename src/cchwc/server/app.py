@@ -1,4 +1,5 @@
 import traceback
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -6,14 +7,26 @@ from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from cchwc.server.routers import fs, orchestrate, pages, search, sessions, tokens
+from cchwc.server.routers import fs, orchestrate, pages, search, sessions, settings, tokens
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 STATIC_DIR = Path(__file__).parent / "static"
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    from cchwc.config import Settings
+    from cchwc.core.db import get_engine
+    from cchwc.core.models import Base
+
+    engine = get_engine(Settings())
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+
+
 def create_app() -> FastAPI:
-    app = FastAPI(title="cchwc", version="0.1.0", debug=True)
+    app = FastAPI(title="cchwc", version="0.1.0", debug=True, lifespan=_lifespan)
 
     @app.exception_handler(Exception)
     async def debug_exception_handler(request: Request, exc: Exception):
@@ -25,6 +38,7 @@ def create_app() -> FastAPI:
     app.include_router(tokens.router, prefix="/api/tokens", tags=["tokens"])
     app.include_router(search.router, prefix="/api/search", tags=["search"])
     app.include_router(orchestrate.router, prefix="/api/orchestrate", tags=["orchestrate"])
+    app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
     app.include_router(fs.router, prefix="/api/fs", tags=["fs"])
 
     if STATIC_DIR.exists():

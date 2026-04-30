@@ -14,6 +14,12 @@ roots = ["C:/work/app"]
 [server]
 host = "127.0.0.2"
 port = 8787
+
+[agents]
+claude_model = "sonnet"
+codex_model = "gpt-5.1-codex"
+claude_effort = "high"
+codex_reasoning_effort = "xhigh"
 """.strip(),
         encoding="utf-8",
     )
@@ -25,6 +31,10 @@ port = 8787
     assert settings.scan_roots == ["C:/work/app"]
     assert settings.host == "127.0.0.2"
     assert settings.port == 8787
+    assert settings.claude_model == "sonnet"
+    assert settings.codex_model == "gpt-5.1-codex"
+    assert settings.claude_effort == "high"
+    assert settings.codex_reasoning_effort == "xhigh"
 
 
 def test_env_overrides_user_config(local_tmp_path, monkeypatch):

@@ -23,6 +23,10 @@ _FLAT_CONFIG_KEYS = {
     "default_max_tokens",
     "claude_bin",
     "codex_bin",
+    "claude_model",
+    "codex_model",
+    "claude_effort",
+    "codex_reasoning_effort",
     "log_level",
     "log_file",
 }
@@ -54,6 +58,10 @@ _SECTION_CONFIG_KEYS = {
     "agents": {
         "claude_bin": "claude_bin",
         "codex_bin": "codex_bin",
+        "claude_model": "claude_model",
+        "codex_model": "codex_model",
+        "claude_effort": "claude_effort",
+        "codex_reasoning_effort": "codex_reasoning_effort",
     },
     "logging": {
         "level": "log_level",
@@ -145,6 +153,10 @@ class Settings(BaseSettings):
 
     claude_bin: str = "claude"
     codex_bin: str = "codex"
+    claude_model: str = ""
+    codex_model: str = ""
+    claude_effort: str = ""
+    codex_reasoning_effort: str = ""
 
     log_level: str = "INFO"
     log_file: Path | None = None

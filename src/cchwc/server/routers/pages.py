@@ -142,5 +142,27 @@ async def tokens_page(request: Request):
 
 @router.get("/orchestrate")
 async def orchestrate_page(request: Request):
+    from cchwc.config import Settings
+
     templates = request.app.state.templates
-    return templates.TemplateResponse(request=request, name="orchestrate/index.html")
+    return templates.TemplateResponse(
+        request=request,
+        name="orchestrate/index.html",
+        context={"settings": Settings()},
+    )
+
+
+@router.get("/settings")
+async def settings_page(request: Request):
+    from cchwc.config import Settings, get_config_path, read_user_config
+
+    templates = request.app.state.templates
+    return templates.TemplateResponse(
+        request=request,
+        name="settings.html",
+        context={
+            "settings": Settings(),
+            "config_path": get_config_path(),
+            "user_config": read_user_config(),
+        },
+    )

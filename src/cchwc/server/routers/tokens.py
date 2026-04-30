@@ -1,11 +1,15 @@
+from collections import defaultdict
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cchwc.core.models import Message, Project, Session
+from cchwc.core.models import Message, OrchestrationStep, Project, Session
 from cchwc.server.deps import get_db
 
 router = APIRouter()
+
+_ORCH_AGENT_TYPES = {"claude", "codex"}
 
 
 @router.get("/daily")
@@ -15,7 +19,7 @@ async def daily_tokens(
     db: AsyncSession = Depends(get_db),
 ):
     date_col = func.date(Session.started_at)
-    query = (
+    session_q = (
         select(
             date_col.label("date"),
             Session.agent_type,
@@ -23,29 +27,59 @@ async def daily_tokens(
             func.sum(Session.total_output_tokens).label("output_tokens"),
             func.sum(Session.total_cache_read_tokens).label("cache_read_tokens"),
             func.sum(Session.total_cache_creation_tokens).label("cache_creation_tokens"),
-            func.count(Session.id).label("session_count"),
         )
         .group_by(date_col, Session.agent_type)
         .order_by(date_col.desc())
         .limit(days * 2)
     )
     if agent_type:
-        query = query.where(Session.agent_type == agent_type)
+        session_q = session_q.where(Session.agent_type == agent_type)
 
-    result = await db.execute(query)
-    rows = result.all()
+    orch_date_col = func.date(OrchestrationStep.started_at)
+    orch_q = (
+        select(
+            orch_date_col.label("date"),
+            OrchestrationStep.agent_type,
+            func.sum(OrchestrationStep.input_tokens).label("input_tokens"),
+            func.sum(OrchestrationStep.output_tokens).label("output_tokens"),
+        )
+        .where(OrchestrationStep.agent_type.in_(_ORCH_AGENT_TYPES))
+        .group_by(orch_date_col, OrchestrationStep.agent_type)
+        .order_by(orch_date_col.desc())
+        .limit(days * 2)
+    )
+    if agent_type:
+        orch_q = orch_q.where(OrchestrationStep.agent_type == agent_type)
+
+    session_rows = (await db.execute(session_q)).all()
+    orch_rows = (await db.execute(orch_q)).all()
+
+    def _zero() -> dict:
+        return {"input_tokens": 0, "output_tokens": 0, "cache_read_tokens": 0, "cache_creation_tokens": 0}
+
+    # Merge by (date, agent_type)
+    merged: dict[tuple, dict] = defaultdict(_zero)
+    for r in session_rows:
+        key = (str(r.date), r.agent_type)
+        merged[key]["input_tokens"] += r.input_tokens or 0
+        merged[key]["output_tokens"] += r.output_tokens or 0
+        merged[key]["cache_read_tokens"] += r.cache_read_tokens or 0
+        merged[key]["cache_creation_tokens"] += r.cache_creation_tokens or 0
+    for r in orch_rows:
+        key = (str(r.date), r.agent_type)
+        merged[key]["input_tokens"] += r.input_tokens or 0
+        merged[key]["output_tokens"] += r.output_tokens or 0
 
     return [
         {
-            "date": str(r.date),
-            "agent_type": r.agent_type,
-            "input_tokens": r.input_tokens or 0,
-            "output_tokens": r.output_tokens or 0,
-            "cache_read_tokens": r.cache_read_tokens or 0,
-            "cache_creation_tokens": r.cache_creation_tokens or 0,
-            "session_count": r.session_count,
+            "date": date,
+            "agent_type": atype,
+            "input_tokens": v["input_tokens"],
+            "output_tokens": v["output_tokens"],
+            "cache_read_tokens": v["cache_read_tokens"],
+            "cache_creation_tokens": v["cache_creation_tokens"],
         }
-        for r in rows
+        for (date, atype), v in sorted(merged.items(), reverse=True)
     ]
 
 
@@ -138,20 +172,31 @@ async def tokens_by_project(db: AsyncSession = Depends(get_db)):
 
 @router.get("/summary")
 async def token_summary(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(
-            func.sum(Session.total_input_tokens).label("total_input"),
-            func.sum(Session.total_output_tokens).label("total_output"),
-            func.sum(Session.total_cache_read_tokens).label("total_cache_read"),
-            func.sum(Session.total_cache_creation_tokens).label("total_cache_creation"),
-            func.count(Session.id).label("total_sessions"),
+    session_row = (
+        await db.execute(
+            select(
+                func.sum(Session.total_input_tokens).label("total_input"),
+                func.sum(Session.total_output_tokens).label("total_output"),
+                func.sum(Session.total_cache_read_tokens).label("total_cache_read"),
+                func.sum(Session.total_cache_creation_tokens).label("total_cache_creation"),
+                func.count(Session.id).label("total_sessions"),
+            )
         )
-    )
-    row = result.one()
+    ).one()
+
+    orch_row = (
+        await db.execute(
+            select(
+                func.sum(OrchestrationStep.input_tokens).label("total_input"),
+                func.sum(OrchestrationStep.output_tokens).label("total_output"),
+            ).where(OrchestrationStep.agent_type.in_(_ORCH_AGENT_TYPES))
+        )
+    ).one()
+
     return {
-        "total_input_tokens": row.total_input or 0,
-        "total_output_tokens": row.total_output or 0,
-        "total_cache_read_tokens": row.total_cache_read or 0,
-        "total_cache_creation_tokens": row.total_cache_creation or 0,
-        "total_sessions": row.total_sessions,
+        "total_input_tokens": (session_row.total_input or 0) + (orch_row.total_input or 0),
+        "total_output_tokens": (session_row.total_output or 0) + (orch_row.total_output or 0),
+        "total_cache_read_tokens": session_row.total_cache_read or 0,
+        "total_cache_creation_tokens": session_row.total_cache_creation or 0,
+        "total_sessions": session_row.total_sessions,
     }

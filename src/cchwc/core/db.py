@@ -1,11 +1,10 @@
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
 
 from cchwc.config import Settings
 
 # Module-level engine cache — one engine per DB path.
-# NullPool: SQLite connections are opened/closed per-request, so no stale
-# file handles remain after the server exits.
+# pool_size=1 / max_overflow=0: serialise all DB access through a single
+# connection so concurrent asyncio coroutines never race for SQLite write locks.
 _engines: dict[str, AsyncEngine] = {}
 
 
@@ -18,8 +17,13 @@ def get_engine(settings: Settings | None = None) -> AsyncEngine:
         engine = create_async_engine(
             db_url,
             echo=False,
-            connect_args={"timeout": 5, "check_same_thread": False},
-            poolclass=NullPool,
+            connect_args={
+                "check_same_thread": False,
+                "timeout": 30,          # sqlite3 busy-wait (seconds)
+            },
+            pool_size=1,
+            max_overflow=0,
+            pool_timeout=60,
         )
 
         from sqlalchemy import event
@@ -28,7 +32,6 @@ def get_engine(settings: Settings | None = None) -> AsyncEngine:
         def _set_pragmas(dbapi_conn, _record):
             cursor = dbapi_conn.cursor()
             cursor.execute("PRAGMA journal_mode=WAL")
-            cursor.execute("PRAGMA busy_timeout=5000")
             cursor.execute("PRAGMA synchronous=NORMAL")
             cursor.close()
 
@@ -37,7 +40,8 @@ def get_engine(settings: Settings | None = None) -> AsyncEngine:
 
 
 def get_session_factory(settings: Settings | None = None) -> async_sessionmaker[AsyncSession]:
-    return async_sessionmaker(get_engine(settings), expire_on_commit=False)
+    # autoflush=False: prevent mid-query implicit flushes that race with other writers
+    return async_sessionmaker(get_engine(settings), expire_on_commit=False, autoflush=False)
 
 
 async def dispose_engine(settings: Settings | None = None) -> None:

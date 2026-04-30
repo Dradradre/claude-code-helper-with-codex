@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+{% block title %}Settings — cchwc{% endblock %}
+{% block content %}
+
+<div class="mb-8 flex items-start justify-between gap-4">
+  <div>
+    <h1 class="text-2xl font-semibold text-gray-900">Settings</h1>
+    <p class="text-sm text-gray-500 mt-1">현재 설정을 확인하고 config.toml에 저장합니다.</p>
+  </div>
+  <div class="text-right">
+    <p class="text-xs text-gray-400">Config file</p>
+    <p class="text-xs font-mono text-gray-600 mt-1">{{ config_path }}</p>
+  </div>
+</div>
+
+<div id="save-banner" class="hidden mb-5 rounded-lg border px-4 py-3 text-sm"></div>
+
+<form id="settings-form" class="space-y-6">
+  <section class="bg-white rounded-xl border border-gray-200 p-5">
+    <h2 class="text-sm font-semibold text-gray-800 mb-4">Paths</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <label class="block">
+        <span class="block text-xs font-medium text-gray-600 mb-1.5">Claude sessions root</span>
+        <input id="claude-root" value="{{ settings.claude_root }}"
+          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg font-mono">
+      </label>
+      <label class="block">
+        <span class="block text-xs font-medium text-gray-600 mb-1.5">Codex sessions root</span>
+        <input id="codex-root" value="{{ settings.codex_root }}"
+          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg font-mono">
+      </label>
+      <label class="block">
+        <span class="block text-xs font-medium text-gray-600 mb-1.5">Database path</span>
+        <input id="db-path" value="{{ settings.db_path }}"
+          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg font-mono">
+      </label>
+    </div>
+  </section>
+
+  <section class="bg-white rounded-xl border border-gray-200 p-5">
+    <h2 class="text-sm font-semibold text-gray-800 mb-4">Scan</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <label class="block">
+        <span class="block text-xs font-medium text-gray-600 mb-1.5">Scope</span>
+        <select id="scan-mode" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+          <option value="global" {% if settings.scan_mode == "global" %}selected{% endif %}>Global</option>
+          <option value="project" {% if settings.scan_mode == "project" %}selected{% endif %}>Project roots only</option>
+        </select>
+      </label>
+      <label class="block">
+        <span class="block text-xs font-medium text-gray-600 mb-1.5">Concurrency</span>
+        <input id="scan-concurrency" type="number" min="1" value="{{ settings.scan_concurrency }}"
+          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+      </label>
+      <label class="block">
+        <span class="block text-xs font-medium text-gray-600 mb-1.5">Watch debounce ms</span>
+        <input id="watch-debounce" type="number" min="0" value="{{ settings.watch_debounce_ms }}"
+          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+      </label>
+    </div>
+    <label class="block mt-4">
+      <span class="block text-xs font-medium text-gray-600 mb-1.5">Project scan roots</span>
+      <textarea id="scan-roots" rows="4"
+        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg font-mono"
+        placeholder="한 줄에 하나씩 입력">{{ "\n".join(settings.scan_roots) }}</textarea>
+    </label>
+  </section>
+
+  <section class="bg-white rounded-xl border border-gray-200 p-5">
+    <h2 class="text-sm font-semibold text-gray-800 mb-4">Orchestrator Defaults</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <label class="block">
+        <span class="block text-xs font-medium text-gray-600 mb-1.5">Max rounds</span>
+        <input id="default-max-rounds" type="number" min="1" value="{{ settings.default_max_rounds }}"
+          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+      </label>
+      <label class="block">
+        <span class="block text-xs font-medium text-gray-600 mb-1.5">Max tokens</span>
+        <input id="default-max-tokens" type="number" min="1000" step="1000" value="{{ settings.default_max_tokens }}"
+          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+      </label>
+      <label class="block">
+        <span class="block text-xs font-medium text-gray-600 mb-1.5">Max cost USD</span>
+        <input id="default-max-cost" type="number" min="0" step="0.5" value="{{ settings.default_max_cost_usd }}"
+          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+      </label>
+    </div>
+  </section>
+
+  <section class="bg-white rounded-xl border border-gray-200 p-5">
+    <h2 class="text-sm font-semibold text-gray-800 mb-4">Agents & Server</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <label class="block">
+        <span class="block text-xs font-medium text-gray-600 mb-1.5">Claude binary</span>
+        <input id="claude-bin" value="{{ settings.claude_bin }}"
+          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg font-mono">
+      </label>
+      <label class="block">
+        <span class="block text-xs font-medium text-gray-600 mb-1.5">Codex binary</span>
+        <input id="codex-bin" value="{{ settings.codex_bin }}"
+          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg font-mono">
+      </label>
+      <label class="block">
+        <span class="block text-xs font-medium text-gray-600 mb-1.5">Claude model</span>
+        <input id="claude-model" value="{{ settings.claude_model }}"
+          placeholder="비우면 Claude CLI 기본값"
+          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg font-mono">
+      </label>
+      <label class="block">
+        <span class="block text-xs font-medium text-gray-600 mb-1.5">Codex model</span>
+        <input id="codex-model" value="{{ settings.codex_model }}"
+          placeholder="비우면 Codex CLI 기본값"
+          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg font-mono">
+      </label>
+      <label class="block">
+        <span class="block text-xs font-medium text-gray-600 mb-1.5">Claude effort</span>
+        <select id="claude-effort" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+          <option value="" {% if not settings.claude_effort %}selected{% endif %}>CLI default</option>
+          {% for level in ["low", "medium", "high", "xhigh", "max"] %}
+          <option value="{{ level }}" {% if settings.claude_effort == level %}selected{% endif %}>{{ level }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="block">
+        <span class="block text-xs font-medium text-gray-600 mb-1.5">Codex reasoning effort</span>
+        <select id="codex-reasoning-effort" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+          <option value="" {% if not settings.codex_reasoning_effort %}selected{% endif %}>CLI default</option>
+          {% for level in ["low", "medium", "high", "xhigh", "max"] %}
+          <option value="{{ level }}" {% if settings.codex_reasoning_effort == level %}selected{% endif %}>{{ level }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="block">
+        <span class="block text-xs font-medium text-gray-600 mb-1.5">Log level</span>
+        <select id="log-level" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+          {% for level in ["TRACE", "DEBUG", "INFO", "WARN", "WARNING", "ERROR", "CRITICAL", "OFF"] %}
+          <option value="{{ level }}" {% if settings.log_level == level %}selected{% endif %}>{{ level }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="block">
+        <span class="block text-xs font-medium text-gray-600 mb-1.5">Host</span>
+        <input id="server-host" value="{{ settings.host }}"
+          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg font-mono">
+      </label>
+      <label class="block">
+        <span class="block text-xs font-medium text-gray-600 mb-1.5">Port</span>
+        <input id="server-port" type="number" min="1" max="65535" value="{{ settings.port }}"
+          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg">
+      </label>
+      <label class="block">
+        <span class="block text-xs font-medium text-gray-600 mb-1.5">Log file</span>
+        <input id="log-file" value="{{ settings.log_file or '' }}"
+          class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg font-mono">
+      </label>
+    </div>
+  </section>
+
+  <div class="flex items-center justify-between">
+    <button type="button" onclick="saveSettings()"
+      class="px-5 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700">
+      저장
+    </button>
+    <button type="button" onclick="window.location.reload()"
+      class="px-4 py-2 text-sm text-gray-600 rounded-lg border border-gray-200 hover:bg-gray-50">
+      다시 불러오기
+    </button>
+  </div>
+</form>
+
+<section class="mt-8 bg-white rounded-xl border border-gray-200 p-5">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-sm font-semibold text-gray-800">Raw config.toml</h2>
+    <span class="text-xs text-gray-400">unknown keys are preserved</span>
+  </div>
+  <pre id="raw-config" class="text-xs text-gray-600 bg-gray-50 rounded-lg p-4 overflow-x-auto">{{ user_config | tojson(indent=2) }}</pre>
+</section>
+
+<script>
+async function saveSettings() {
+  const payload = {
+    paths: {
+      db_path: valueOf('db-path'),
+      claude_root: valueOf('claude-root'),
+      codex_root: valueOf('codex-root'),
+    },
+    scan: {
+      mode: valueOf('scan-mode'),
+      roots: valueOf('scan-roots').split(/\r?\n/).map(s => s.trim()).filter(Boolean),
+      concurrency: numberOf('scan-concurrency'),
+    },
+    server: {
+      host: valueOf('server-host'),
+      port: numberOf('server-port'),
+    },
+    watch: {
+      debounce_ms: numberOf('watch-debounce'),
+    },
+    orchestrator: {
+      default_max_rounds: numberOf('default-max-rounds'),
+      default_max_tokens: numberOf('default-max-tokens'),
+      default_max_cost_usd: floatOf('default-max-cost'),
+    },
+    agents: {
+      claude_bin: valueOf('claude-bin'),
+      codex_bin: valueOf('codex-bin'),
+      claude_model: valueOf('claude-model'),
+      codex_model: valueOf('codex-model'),
+      claude_effort: valueOf('claude-effort'),
+      codex_reasoning_effort: valueOf('codex-reasoning-effort'),
+    },
+    logging: {
+      level: valueOf('log-level'),
+      file: valueOf('log-file'),
+    },
+  };
+
+  try {
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'save failed');
+    document.getElementById('raw-config').textContent = JSON.stringify(data.user_config, null, 2);
+    const restart = data.restart_required?.length
+      ? ` 재시작 후 적용: ${data.restart_required.join(', ')}`
+      : '';
+    showBanner('저장했습니다.' + restart, 'ok');
+  } catch (err) {
+    showBanner(String(err.message || err), 'error');
+  }
+}
+
+function valueOf(id) {
+  return document.getElementById(id).value.trim();
+}
+
+function numberOf(id) {
+  return Number.parseInt(valueOf(id), 10);
+}
+
+function floatOf(id) {
+  return Number.parseFloat(valueOf(id));
+}
+
+function showBanner(message, state) {
+  const el = document.getElementById('save-banner');
+  const cls = state === 'ok'
+    ? 'bg-green-50 text-green-700 border-green-200'
+    : 'bg-red-50 text-red-700 border-red-200';
+  el.className = 'mb-5 rounded-lg border px-4 py-3 text-sm ' + cls;
+  el.textContent = message;
+  el.classList.remove('hidden');
+}
+</script>
+
+{% endblock %}

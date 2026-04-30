@@ -107,6 +107,135 @@
           </div>
         </div>
 
+        <div id="debate-options" class="hidden max-w-xs">
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1.5">최대 라운드</label>
+            <input id="max-rounds-input" type="number" min="1" max="20" value="{{ settings.default_max_rounds }}"
+              class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          </div>
+        </div>
+
+        <details id="advanced-options" class="rounded-lg border border-gray-100 bg-gray-50/70">
+          <summary class="cursor-pointer select-none px-3 py-2 text-xs font-medium text-gray-500">
+            고급 설정
+          </summary>
+          <div class="px-3 pb-3 pt-1 space-y-4">
+            <div id="common-options" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1.5">Step timeout</label>
+                <input id="timeout-input" type="number" min="30" max="3600" value="600"
+                  class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1.5">Max tokens</label>
+                <input id="max-tokens-input" type="number" min="1000" step="1000" value="{{ settings.default_max_tokens }}"
+                  class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1.5">Max cost USD</label>
+                <input id="max-cost-input" type="number" min="0" step="0.5" value="{{ settings.default_max_cost_usd }}"
+                  class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+              </div>
+            </div>
+
+            <div id="model-options" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1.5">Claude model</label>
+                <input id="claude-model-input" value="{{ settings.claude_model }}"
+                  placeholder="비우면 Claude CLI 기본값"
+                  class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1.5">Codex model</label>
+                <input id="codex-model-input" value="{{ settings.codex_model }}"
+                  placeholder="비우면 Codex CLI 기본값"
+                  class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1.5">Claude effort</label>
+                <select id="claude-effort-input"
+                  class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="" {% if not settings.claude_effort %}selected{% endif %}>CLI default</option>
+                  {% for level in ["low", "medium", "high", "xhigh", "max"] %}
+                  <option value="{{ level }}" {% if settings.claude_effort == level %}selected{% endif %}>{{ level }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1.5">Codex reasoning</label>
+                <select id="codex-reasoning-effort-input"
+                  class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="" {% if not settings.codex_reasoning_effort %}selected{% endif %}>CLI default</option>
+                  {% for level in ["low", "medium", "high", "xhigh", "max"] %}
+                  <option value="{{ level }}" {% if settings.codex_reasoning_effort == level %}selected{% endif %}>{{ level }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+
+            <div id="review-options" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1.5">구현자</label>
+                <select id="implementer-input"
+                  class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  <option value="claude">Claude</option>
+                  <option value="codex">Codex</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1.5">리뷰어</label>
+                <select id="reviewer-input"
+                  class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  <option value="codex">Codex</option>
+                  <option value="claude">Claude</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1.5">리뷰 라운드</label>
+                <input id="review-rounds-input" type="number" min="1" max="10" value="1"
+                  class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500">
+              </div>
+            </div>
+
+            <div id="debate-advanced-options" class="hidden grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1.5">토론 A</label>
+                <select id="debater-a-input"
+                  class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                  <option value="claude">Claude</option>
+                  <option value="codex">Codex</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1.5">토론 B</label>
+                <select id="debater-b-input"
+                  class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                  <option value="codex">Codex</option>
+                  <option value="claude">Claude</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1.5">Judge</label>
+                <select id="judge-input"
+                  class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                  <option value="claude">Claude</option>
+                  <option value="codex">Codex</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1.5">판정 시작</label>
+                <input id="convergence-round-input" type="number" min="1" max="20" value="1"
+                  class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between border border-gray-100 rounded-lg px-3 py-2 bg-white">
+              <span class="text-xs font-medium text-gray-500">예상 호출 수</span>
+              <span id="call-estimate" class="text-xs text-gray-700">2 calls</span>
+            </div>
+          </div>
+        </details>
+
         <div class="flex gap-2 pt-1">
           <button onclick="startRun()"
             class="px-5 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors">
@@ -172,13 +301,24 @@
 <!-- ── Output panel ─────────────────────────────────────────────── -->
 <div id="run-output" class="hidden bg-white rounded-xl border border-gray-200 p-6 mb-6">
   <div class="flex items-center justify-between mb-5">
-    <h3 class="text-sm font-semibold text-gray-900">실행 결과</h3>
-    <span id="run-status"
-      class="text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-medium">
-      실행 중
-    </span>
+    <div>
+      <h3 class="text-sm font-semibold text-gray-900">실행 결과</h3>
+      <p id="run-meta" class="text-xs text-gray-400 mt-0.5"></p>
+    </div>
+    <div class="flex items-center gap-2">
+      <span id="run-elapsed" class="text-xs text-gray-400"></span>
+      <button id="stop-run-btn" onclick="stopCurrentRun()"
+        class="hidden px-2.5 py-1 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+        중지
+      </button>
+      <span id="run-status"
+        class="text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-medium">
+        실행 중
+      </span>
+    </div>
   </div>
-  <div id="run-steps" class="space-y-3"></div>
+  <div id="final-judgment" class="hidden agent-judge agent-card rounded-xl p-4 mb-4"></div>
+  <div id="run-steps" class="space-y-4"></div>
 </div>
 
 <!-- ── Recent runs ──────────────────────────────────────────────── -->
@@ -187,10 +327,18 @@
     <h3 class="text-sm font-semibold text-gray-700">최근 실행</h3>
   </div>
   <div id="runs-list"
-    hx-get="/api/orchestrate/runs"
+    hx-get="/api/orchestrate/runs/partial"
     hx-trigger="load"
     hx-target="this"
-    class="p-4 text-sm text-gray-400">불러오는 중…</div>
+    class="text-sm text-gray-400">불러오는 중…</div>
+</div>
+
+<div id="run-detail-panel" class="hidden mt-6 bg-white rounded-xl border border-gray-200 overflow-hidden">
+  <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+    <h3 class="text-sm font-semibold text-gray-700">저장된 실행 상세</h3>
+    <button onclick="hideRunDetail()" class="text-xs text-gray-400 hover:text-gray-700">닫기</button>
+  </div>
+  <div id="run-detail-content" class="p-5"></div>
 </div>
 
 <script>
@@ -202,6 +350,13 @@ let mentionAtPos = -1;
 let mentionSelectedIdx = 0;
 let currentBrowsePath = '~';
 let currentMode = '';
+let currentRunHadError = false;
+let currentRunId = null;
+let runStartedAtMs = 0;
+let elapsedTimer = null;
+let currentRoundBody = null;
+let activeEventSource = null;
+const cachedRuns = new Map();
 
 // ── Mode form ─────────────────────────────────────────────────────
 function showForm(mode) {
@@ -209,6 +364,10 @@ function showForm(mode) {
   currentMode = mode;
   document.getElementById('mode-input').value = mode;
   document.getElementById('form-title').textContent = titles[mode];
+  document.getElementById('review-options').classList.toggle('hidden', mode !== 'review');
+  document.getElementById('debate-options').classList.toggle('hidden', mode !== 'debate');
+  document.getElementById('debate-advanced-options').classList.toggle('hidden', mode !== 'debate');
+  updateCallEstimate();
   document.getElementById('form-area').classList.remove('hidden');
   document.getElementById('prompt-input').focus();
   document.getElementById('run-output').classList.add('hidden');
@@ -469,6 +628,14 @@ document.addEventListener('DOMContentLoaded', () => {
   textarea.addEventListener('blur', () => {
     setTimeout(hideMentionDropdown, 150);
   });
+  [
+    'max-rounds-input', 'convergence-round-input', 'review-rounds-input',
+    'implementer-input', 'reviewer-input', 'debater-a-input', 'debater-b-input', 'judge-input',
+  ].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', updateCallEstimate);
+    if (el) el.addEventListener('change', updateCallEstimate);
+  });
 });
 
 function handlePromptInput() {
@@ -573,12 +740,19 @@ async function startRun() {
   const prompt = document.getElementById('prompt-input').value.trim();
   if (!prompt) { document.getElementById('prompt-input').focus(); return; }
   const cwd = selectedCwd;
+  const config = buildRunConfig(mode);
 
   hideForm();
   streamCards.clear();
+  currentRoundBody = null;
   const outputEl = document.getElementById('run-output');
   outputEl.classList.remove('hidden');
   document.getElementById('run-steps').innerHTML = '';
+  document.getElementById('final-judgment').classList.add('hidden');
+  document.getElementById('final-judgment').innerHTML = '';
+  document.getElementById('run-meta').textContent = '';
+  currentRunHadError = false;
+  currentRunId = null;
   setRunStatus('running');
   outputEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -586,49 +760,92 @@ async function startRun() {
     const res = await fetch('/api/orchestrate/runs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode, prompt, cwd }),
+      body: JSON.stringify({ mode, prompt, cwd, config }),
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
+    currentRunId = data.id;
+    document.getElementById('run-meta').textContent = `#${data.id} · ${modeLabel(mode)} · ${estimateCalls(mode, config)} calls`;
+    document.getElementById('stop-run-btn').classList.remove('hidden');
+    startElapsedTimer();
 
+    let streamDone = false;
     const es = new EventSource('/api/orchestrate/runs/' + data.id + '/stream');
+    activeEventSource = es;
     es.onmessage = (e) => {
       const ev = JSON.parse(e.data);
+      if (ev.type === 'done') {
+        streamDone = true;
+        es.close();
+      }
       handleStreamEvent(ev, mode);
     };
     es.onerror = () => {
-      setRunStatus('error');
+      if (!streamDone) {
+        setRunStatus('error');
+      }
       es.close();
+      activeEventSource = null;
     };
   } catch (err) {
     appendErrorStep('실행 실패: ' + err.message);
     setRunStatus('error');
+    stopElapsedTimer();
   }
 }
 
-function handleStreamEvent(ev, mode) {
-  const steps = document.getElementById('run-steps');
+function buildRunConfig(mode) {
+  const timeout = boundedInt('timeout-input', 600, 30, 3600);
+  const maxTokens = boundedInt('max-tokens-input', 100000, 1000, 1000000);
+  const maxCost = boundedFloat('max-cost-input', 5, 0, 1000);
+  const config = {
+    timeout_per_step_sec: timeout,
+    max_total_tokens: maxTokens,
+    max_cost_usd: maxCost,
+    claude_model: valueById('claude-model-input'),
+    codex_model: valueById('codex-model-input'),
+    claude_effort: valueById('claude-effort-input'),
+    codex_reasoning_effort: valueById('codex-reasoning-effort-input'),
+  };
 
+  if (mode === 'review') {
+    config.implementer = document.getElementById('implementer-input').value;
+    config.reviewer = document.getElementById('reviewer-input').value;
+    config.max_review_rounds = boundedInt('review-rounds-input', 1, 1, 10);
+  }
+
+  if (mode === 'debate') {
+    config.max_rounds = boundedInt('max-rounds-input', 3, 1, 20);
+    config.debater_a = document.getElementById('debater-a-input').value;
+    config.debater_b = document.getElementById('debater-b-input').value;
+    config.judge = document.getElementById('judge-input').value;
+    config.convergence_check_after_round = boundedInt('convergence-round-input', 1, 1, config.max_rounds);
+  }
+
+  return config;
+}
+
+function handleStreamEvent(ev, mode) {
   if (ev.type === 'done') {
     // Finalize any lingering streaming cards
     streamCards.forEach(sc => finalizeStreamCard(sc));
     streamCards.clear();
-    setRunStatus('done');
+    stopElapsedTimer();
+    activeEventSource = null;
+    document.getElementById('stop-run-btn').classList.add('hidden');
+    setRunStatus(currentRunHadError ? 'error' : 'done');
     if (typeof htmx !== 'undefined') htmx.trigger('#runs-list', 'load');
     return;
   }
 
   if (ev.type === 'status') {
-    const div = document.createElement('div');
-    div.className = 'flex items-center gap-2 text-xs text-gray-400 py-0.5';
-    div.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0 animate-pulse"></span>' + escHtml(ev.text);
-    steps.appendChild(div);
+    appendStatusStep(ev.text || '');
     return;
   }
 
   if (ev.type === 'stream_start') {
     const sc = createStreamCard(ev.agent, ev.role);
-    steps.appendChild(sc.card);
+    getStepContainer(ev.role).appendChild(sc.card);
     streamCards.set(ev.agent, sc);
     return;
   }
@@ -646,6 +863,12 @@ function handleStreamEvent(ev, mode) {
   if (ev.type === 'stream_end') {
     const sc = streamCards.get(ev.agent);
     if (sc) {
+      if (ev.error) {
+        currentRunHadError = true;
+        sc.pre.textContent = sc.pre.textContent || ev.error;
+        sc.card.classList.add('agent-error');
+        setRunStatus('error');
+      }
       finalizeStreamCard(sc);
       if (!ev.keepCard) streamCards.delete(ev.agent);
     }
@@ -661,6 +884,7 @@ function handleStreamEvent(ev, mode) {
       const judgeEl = document.createElement('div');
       judgeEl.innerHTML = renderJudgmentContent(ev.text || '');
       sc.card.appendChild(judgeEl);
+      renderFinalJudgment(ev.text || '');
       streamCards.delete(ev.agent);
     } else {
       // Fallback: create a new result card (shouldn't normally happen)
@@ -671,7 +895,9 @@ function handleStreamEvent(ev, mode) {
   }
 
   if (ev.type === 'error') {
+    currentRunHadError = true;
     appendErrorStep((ev.agent ? ev.agent + ': ' : '') + (ev.text || ''));
+    setRunStatus('error');
   }
 }
 
@@ -681,10 +907,85 @@ function setRunStatus(state) {
     running: ['실행 중', 'bg-amber-50 text-amber-700 border-amber-200'],
     done:    ['완료',    'bg-green-50 text-green-700 border-green-200'],
     error:   ['오류',    'bg-red-50 text-red-700 border-red-200'],
+    stopped: ['중지',    'bg-gray-50 text-gray-600 border-gray-200'],
   };
   const [label, cls] = states[state] || states.running;
   el.textContent = label;
   el.className = 'text-xs px-2.5 py-1 rounded-full border font-medium ' + cls;
+}
+
+function appendStatusStep(text) {
+  const roundMatch = text.match(/^Round\s+(\d+)\/(\d+)/i);
+  if (roundMatch) {
+    const section = document.createElement('section');
+    section.className = 'rounded-xl border border-gray-200 bg-gray-50/60 overflow-hidden';
+    section.innerHTML = `
+      <div class="px-4 py-3 border-b border-gray-100 bg-white flex items-center justify-between">
+        <span class="text-xs font-semibold text-gray-700">Round ${escHtml(roundMatch[1])}</span>
+        <span class="text-xs text-gray-400">${escHtml(roundMatch[1])}/${escHtml(roundMatch[2])}</span>
+      </div>
+      <div class="round-body p-3 space-y-3"></div>`;
+    document.getElementById('run-steps').appendChild(section);
+    currentRoundBody = section.querySelector('.round-body');
+    return;
+  }
+
+  const div = document.createElement('div');
+  div.className = 'flex items-center gap-2 text-xs text-gray-400 py-0.5';
+  div.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0 animate-pulse"></span>' + escHtml(text);
+  getStepContainer('status').appendChild(div);
+}
+
+function getStepContainer(role) {
+  if ((role || '').startsWith('debater_') || role === 'judge') {
+    return currentRoundBody || document.getElementById('run-steps');
+  }
+  return document.getElementById('run-steps');
+}
+
+async function stopCurrentRun() {
+  if (!currentRunId) return;
+  document.getElementById('stop-run-btn').classList.add('hidden');
+  try {
+    await fetch('/api/orchestrate/runs/' + currentRunId + '/stop', { method: 'POST' });
+  } catch (_) {}
+  if (activeEventSource) activeEventSource.close();
+  currentRunHadError = true;
+  stopElapsedTimer();
+  setRunStatus('stopped');
+  appendErrorStep('Stopped by user');
+  if (typeof htmx !== 'undefined') htmx.trigger('#runs-list', 'load');
+}
+
+function startElapsedTimer() {
+  runStartedAtMs = Date.now();
+  stopElapsedTimer();
+  const el = document.getElementById('run-elapsed');
+  const tick = () => {
+    el.textContent = formatDuration((Date.now() - runStartedAtMs) / 1000);
+  };
+  tick();
+  elapsedTimer = setInterval(tick, 1000);
+}
+
+function stopElapsedTimer() {
+  if (elapsedTimer) {
+    clearInterval(elapsedTimer);
+    elapsedTimer = null;
+  }
+}
+
+function renderFinalJudgment(text) {
+  const el = document.getElementById('final-judgment');
+  el.innerHTML = `
+    <div class="flex items-center justify-between mb-3">
+      <span class="${AGENT_THEMES.judge.badgeClass}">
+        ${AGENT_THEMES.judge.icon}
+        Final Judge
+      </span>
+    </div>
+    ${renderJudgmentContent(text)}`;
+  el.classList.remove('hidden');
 }
 
 // ── Streaming card helpers ─────────────────────────────────────────
@@ -715,12 +1016,20 @@ function createStreamCard(agentName, role) {
   pre.textContent = '';
   card.appendChild(pre);
 
-  return { card, pre, header };
+  return { card, pre, header, role, agentName };
 }
 
 function finalizeStreamCard(sc) {
   const spinner = sc.header?.querySelector('.stream-spinner');
   if (spinner) spinner.remove();
+  if ((sc.role === 'debater_a' || sc.role === 'debater_b') && sc.pre?.isConnected) {
+    const html = renderDebateArgumentContent(sc.pre.textContent || '');
+    if (html) {
+      const content = document.createElement('div');
+      content.innerHTML = html;
+      sc.pre.replaceWith(content);
+    }
+  }
 }
 
 // ── Step element rendering ─────────────────────────────────────────
@@ -847,14 +1156,334 @@ function renderJudgmentContent(text) {
   return html;
 }
 
+function renderDebateArgumentContent(text) {
+  const argument = parseJsonLike(text);
+  if (!argument || typeof argument !== 'object') return '';
+
+  let html = `<div class="space-y-3">`;
+  if (argument.position) {
+    html += `<p class="text-sm text-gray-800 leading-relaxed">${escHtml(argument.position)}</p>`;
+  }
+  html += renderArgumentList('근거', argument.evidence, 'text-blue-500');
+  html += renderArgumentList('인정', argument.concedes, 'text-green-500');
+  html += renderArgumentList('반박', argument.challenges, 'text-red-400');
+  html += renderRawDetails(text);
+  html += `</div>`;
+  return html;
+}
+
+function renderArgumentList(label, items, markerClass) {
+  if (!Array.isArray(items) || items.length === 0) return '';
+  return `<div>
+    <p class="text-xs font-medium text-gray-500 mb-1.5">${escHtml(label)}</p>
+    <ul class="space-y-1">${items.map(item =>
+      `<li class="flex items-start gap-1.5 text-sm text-gray-700 leading-relaxed">
+        <span class="${markerClass} mt-0.5 flex-shrink-0">•</span>${escHtml(String(item))}
+      </li>`
+    ).join('')}</ul>
+  </div>`;
+}
+
+function parseJsonLike(text) {
+  const candidates = [];
+  const fenceRe = /```(?:json)?\s*([\s\S]*?)```/g;
+  let match;
+  while ((match = fenceRe.exec(text)) !== null) {
+    candidates.push(match[1].trim());
+  }
+
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start >= 0 && end > start) candidates.push(text.slice(start, end + 1));
+  candidates.push(text);
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch (_) {}
+  }
+  return null;
+}
+
+function renderRawDetails(text) {
+  return `<details class="pt-1">
+    <summary class="text-xs text-gray-400 cursor-pointer">Raw</summary>
+    <pre class="mt-2 text-xs text-gray-500 whitespace-pre-wrap font-mono leading-relaxed">${escHtml(text || '')}</pre>
+  </details>`;
+}
+
+async function loadRunDetail(runId) {
+  const panel = document.getElementById('run-detail-panel');
+  const content = document.getElementById('run-detail-content');
+  panel.classList.remove('hidden');
+  content.innerHTML = '<div class="text-sm text-gray-400">불러오는 중...</div>';
+  try {
+    const res = await fetch('/api/orchestrate/runs/' + runId);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const run = await res.json();
+    cachedRuns.set(run.id, run);
+    content.innerHTML = renderRunDetail(run);
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (err) {
+    content.innerHTML = `<div class="agent-error agent-card rounded-xl p-4 text-sm text-red-700">${escHtml(String(err))}</div>`;
+  }
+}
+
+function hideRunDetail() {
+  document.getElementById('run-detail-panel').classList.add('hidden');
+}
+
+function renderRunDetail(run) {
+  const steps = Array.isArray(run.steps) ? run.steps : [];
+  const prompt = run.user_prompt || '';
+  const statusCls = statusClass(run.status);
+  const summary = run.result_summary || '';
+  let html = `
+    <div class="space-y-5">
+      <div class="flex items-start justify-between gap-4">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-sm font-semibold text-gray-900">#${escHtml(String(run.id))}</span>
+            <span class="text-xs px-2 py-0.5 rounded-full border bg-slate-50 text-slate-600 border-slate-200">저장된 기록</span>
+            <span class="text-xs px-2 py-0.5 rounded-full border bg-gray-50 text-gray-600 border-gray-200">${escHtml(modeLabel(run.mode))}</span>
+            <span class="text-xs px-2 py-0.5 rounded-full border ${statusCls}">${escHtml(statusLabel(run.status))}</span>
+          </div>
+          <p class="mt-2 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">${escHtml(prompt)}</p>
+          ${summary ? `<p class="mt-2 text-xs text-gray-400">${escHtml(summary)}</p>` : ''}
+        </div>
+        <div class="flex gap-2 flex-shrink-0">
+          <button onclick="prepareRerunById(${Number(run.id)})"
+            class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">다시 실행</button>
+          <button onclick="copyPromptById(${Number(run.id)})"
+            class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">프롬프트 복사</button>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        ${renderMetric('Started', formatDateTime(run.started_at))}
+        ${renderMetric('Duration', run.duration_sec == null ? '-' : formatDuration(run.duration_sec))}
+        ${renderMetric('Tokens', formatNumber(run.total_tokens || 0))}
+        ${renderMetric('Cost', '$' + Number(run.total_cost_usd || 0).toFixed(4))}
+      </div>`;
+
+  if (steps.length === 0) {
+    html += `<div class="text-sm text-gray-400 border border-dashed border-gray-200 rounded-xl p-5 text-center">저장된 상세 step이 없습니다.</div>`;
+  } else {
+    html += `<div class="space-y-3">${steps.map(renderHistoryStep).join('')}</div>`;
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+function renderMetric(label, value) {
+  return `<div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+    <p class="text-xs text-gray-400">${escHtml(label)}</p>
+    <p class="text-sm font-medium text-gray-700 mt-0.5 truncate">${escHtml(String(value))}</p>
+  </div>`;
+}
+
+function renderHistoryStep(step) {
+  if (step.role === 'status') {
+    if (isTransientHistoryStatus(step.response || '')) return '';
+    return `<div class="flex items-center gap-2 text-xs text-gray-400 py-0.5">
+      <span class="px-1.5 py-0.5 rounded border border-gray-200 bg-gray-50 text-gray-400">진행 로그</span>
+      <span>${escHtml(formatHistoryStatus(step.response || ''))}</span>
+    </div>`;
+  }
+
+  if (step.role === 'error') {
+    return `<div class="agent-error agent-card rounded-xl p-4">
+      <p class="text-sm font-medium text-red-700">${escHtml(step.response || step.error || '')}</p>
+    </div>`;
+  }
+
+  const agent = step.agent_type || 'claude';
+  const theme = AGENT_THEMES[agent] || AGENT_THEMES.claude;
+  const roleLabel = ROLE_LABELS[step.role] || step.role || '';
+  const response = step.response || '';
+  let contentHtml = `<pre class="text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed">${escHtml(response)}</pre>`;
+  if (step.role === 'judge') contentHtml = renderJudgmentContent(response);
+  if (step.role === 'debater_a' || step.role === 'debater_b') {
+    contentHtml = renderDebateArgumentContent(response) || contentHtml;
+  }
+  if (step.error) {
+    contentHtml = `<p class="text-sm font-medium text-red-700">${escHtml(step.error)}</p>${response ? renderRawDetails(response) : ''}`;
+  }
+
+  return `<div class="${theme.wrapClass}">
+    <div class="flex items-center justify-between mb-3">
+      <span class="${theme.badgeClass}">
+        ${theme.icon}
+        ${theme.label}
+        ${roleLabel ? '<span class="opacity-60 font-normal">· ' + escHtml(roleLabel) + '</span>' : ''}
+      </span>
+      <span class="text-xs text-gray-400">${formatNumber((step.input_tokens || 0) + (step.output_tokens || 0))} tokens · ${formatDateTime(step.started_at)}</span>
+    </div>
+    ${contentHtml}
+  </div>`;
+}
+
+function isTransientHistoryStatus(text) {
+  return [
+    '요청 중',
+    '작성 중',
+    '구현 중',
+    '리뷰 중',
+    '수정 중',
+    'Judge evaluating',
+  ].some(token => String(text || '').includes(token));
+}
+
+function formatHistoryStatus(text) {
+  return String(text || '')
+    .replace('Debate ended:', 'Debate result:')
+    .replace('Stalemate detected', 'Stalemate was detected');
+}
+
+function prepareRerunById(runId) {
+  const run = cachedRuns.get(runId);
+  if (!run) return;
+  selectedCwd = run.cwd || '.';
+  document.getElementById('cwd-display').textContent = selectedCwd;
+  showForm(run.mode);
+  document.getElementById('prompt-input').value = run.user_prompt || '';
+  applyConfig(run.mode, run.config || {});
+  hideRunDetail();
+}
+
+function copyPromptById(runId) {
+  const run = cachedRuns.get(runId);
+  if (!run) return;
+  copyText(run.user_prompt || '');
+}
+
+function applyConfig(mode, config) {
+  setValue('timeout-input', config.timeout_per_step_sec ?? 600);
+  setValue('max-tokens-input', config.max_total_tokens ?? 100000);
+  setValue('max-cost-input', config.max_cost_usd ?? 5);
+  setValue('claude-model-input', config.claude_model ?? {{ settings.claude_model | tojson }});
+  setValue('codex-model-input', config.codex_model ?? {{ settings.codex_model | tojson }});
+  setValue('claude-effort-input', config.claude_effort ?? {{ settings.claude_effort | tojson }});
+  setValue(
+    'codex-reasoning-effort-input',
+    config.codex_reasoning_effort ?? {{ settings.codex_reasoning_effort | tojson }}
+  );
+  if (mode === 'review') {
+    setValue('implementer-input', config.implementer ?? 'claude');
+    setValue('reviewer-input', config.reviewer ?? 'codex');
+    setValue('review-rounds-input', config.max_review_rounds ?? 1);
+  }
+  if (mode === 'debate') {
+    setValue('max-rounds-input', config.max_rounds ?? 3);
+    setValue('debater-a-input', config.debater_a ?? 'claude');
+    setValue('debater-b-input', config.debater_b ?? 'codex');
+    setValue('judge-input', config.judge ?? 'claude');
+    setValue('convergence-round-input', config.convergence_check_after_round ?? 1);
+  }
+  updateCallEstimate();
+}
+
+function setValue(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.value = value;
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text || '');
+  } catch (_) {}
+}
+
 function appendErrorStep(msg) {
   const div = document.createElement('div');
   div.className = 'agent-error agent-card rounded-xl p-4';
-  div.innerHTML = `<p class="text-sm text-red-700">${escHtml(msg)}</p>`;
+  const short = String(msg || '').split('\n')[0].slice(0, 180);
+  div.innerHTML = `
+    <p class="text-sm font-medium text-red-700">${escHtml(short || '오류가 발생했습니다')}</p>
+    ${String(msg || '').length > short.length
+      ? `<details class="mt-2">
+          <summary class="text-xs text-red-500 cursor-pointer">상세</summary>
+          <pre class="mt-2 text-xs text-red-700 whitespace-pre-wrap font-mono leading-relaxed">${escHtml(msg)}</pre>
+        </details>`
+      : ''}`;
   document.getElementById('run-steps').appendChild(div);
 }
 
 // ── Utils ─────────────────────────────────────────────────────────
+function boundedInt(id, fallback, min, max) {
+  const value = Number.parseInt(document.getElementById(id)?.value, 10);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(Math.max(value, min), max);
+}
+
+function boundedFloat(id, fallback, min, max) {
+  const value = Number.parseFloat(document.getElementById(id)?.value);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(Math.max(value, min), max);
+}
+
+function valueById(id) {
+  return (document.getElementById(id)?.value || '').trim();
+}
+
+function updateCallEstimate() {
+  const mode = document.getElementById('mode-input').value || currentMode || 'compare';
+  const config = buildRunConfig(mode);
+  const el = document.getElementById('call-estimate');
+  if (el) el.textContent = estimateCalls(mode, config) + ' calls';
+}
+
+function estimateCalls(mode, config) {
+  if (mode === 'compare') return 2;
+  if (mode === 'review') {
+    const rounds = config.max_review_rounds || 1;
+    return 1 + rounds + Math.max(rounds - 1, 0);
+  }
+  if (mode === 'debate') {
+    const rounds = config.max_rounds || 3;
+    const judgeStart = config.convergence_check_after_round || 1;
+    const judgeCalls = Math.max(rounds - judgeStart + 1, 0);
+    return rounds * 2 + judgeCalls;
+  }
+  return 1;
+}
+
+function modeLabel(mode) {
+  return { compare: 'Compare', review: 'Review', debate: 'Debate' }[mode] || mode || '';
+}
+
+function statusLabel(status) {
+  return { completed: '완료', running: '실행 중', failed: '실패', stopped: '중지' }[status] || status || '';
+}
+
+function statusClass(status) {
+  return {
+    completed: 'bg-green-50 text-green-700 border-green-200',
+    running: 'bg-amber-50 text-amber-700 border-amber-200',
+    failed: 'bg-red-50 text-red-700 border-red-200',
+    stopped: 'bg-gray-50 text-gray-600 border-gray-200',
+  }[status] || 'bg-gray-50 text-gray-600 border-gray-200';
+}
+
+function formatDateTime(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function formatDuration(seconds) {
+  const value = Math.max(Number(seconds) || 0, 0);
+  if (value < 60) return value.toFixed(value < 10 ? 1 : 0) + 's';
+  const mins = Math.floor(value / 60);
+  const secs = Math.round(value % 60);
+  return mins + 'm ' + secs + 's';
+}
+
+function formatNumber(value) {
+  return new Intl.NumberFormat().format(Number(value) || 0);
+}
+
 function escHtml(str) {
   return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }

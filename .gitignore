@@ -66,3 +66,6 @@ coverage.xml
 
 # Alembic
 alembic/versions/*.pyc
+
+# 개발용 로컬 스크립트
+dev.sh
