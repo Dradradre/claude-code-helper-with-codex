@@ -132,9 +132,8 @@ class CodexAdapter(SessionAdapter):
         if session_id is None:
             session_id = path.stem
 
-        if cwd is not None and self._scan_roots is not None:
-            if not self._matches_scan_roots(cwd):
-                return None
+        if cwd is not None and self._scan_roots is not None and not self._matches_scan_roots(cwd):
+            return None
 
         return ParsedSession(
             agent_type=self.agent_type,
