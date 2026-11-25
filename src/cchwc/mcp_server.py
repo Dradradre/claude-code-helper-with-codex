@@ -6,7 +6,7 @@ from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP(
     "cchwc",
-    description="Claude + Codex 에이전트 오케스트레이션 (compare / review / debate)",
+    instructions="Claude + Codex 에이전트 오케스트레이션 (compare / review / debate)",
 )
 
 
