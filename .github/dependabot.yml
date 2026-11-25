@@ -4,6 +4,10 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    # mcp 2.x renames FastMCP, which src/cchwc/mcp_server.py uses; moving to it is a code change, not a bump.
+    ignore:
+      - dependency-name: mcp
+        versions: ['>=2']
     groups:
       python:
         patterns: ['*']
